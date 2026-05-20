@@ -206,6 +206,26 @@ app.get('/api/connections', async (req: Request, res: Response) => {
 
 // Inicializar Vite/Server
 async function startServer() {
+  try {
+    // Tenta criar a tabela automaticamente caso não exista (Ideal para subir no Coolify sem dor de cabeça)
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS kommo_connections (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          empresa_id VARCHAR(255) NOT NULL UNIQUE,
+          kommo_subdomain VARCHAR(255) NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('[DB] Tabela kommo_connections verificada/criada com sucesso no PostgreSQL!');
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.warn('[DB] Aviso: Não foi possível criar/verificar a tabela (o banco pode estar offline ou a URL inválida):', err.message);
+  }
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
