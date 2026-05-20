@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/auth/kommo/connect', (req: Request, res: Response) => {
   try {
     const client_id = process.env.KOMMO_CLIENT_ID;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : undefined);
 
     const { empresa_id } = req.query;
 
@@ -39,7 +39,7 @@ app.get('/auth/kommo/connect', (req: Request, res: Response) => {
 
     if (!client_id || !redirect_uri) {
       res.status(500).json({ 
-        error: 'Faltam credenciais do Kommo Hub no servidor (.env).',
+        error: 'Faltam credenciais do Kommo Hub no servidor (.env ou painel do Coolify).',
         details: { hasClientId: !!client_id, hasRedirectUri: !!redirect_uri }
       });
       return;
@@ -78,12 +78,12 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
     // Buscando as variáveis direto aqui dentro também 💡
     const client_id = process.env.KOMMO_CLIENT_ID;
     const client_secret = process.env.KOMMO_CLIENT_SECRET;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : undefined);
 
     const empresa_id = state;
 
     if (!client_id || !client_secret || !redirect_uri) {
-      res.status(500).send('Faltam credenciais do Kommo Hub no servidor (.env).');
+      res.status(500).send('Faltam credenciais do Kommo Hub no servidor (.env ou painel do Coolify).');
       return;
     }
 
