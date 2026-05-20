@@ -19,20 +19,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Environmental variable checks
-const getRequiredEnv = (key: string): string => {
-  const value = process.env[key];
-  if (!value) {
-    console.warn(`[Aviso] Variável de ambiente ${key} não está configurada.`);
-    return '';
-  }
-  return value;
-};
-
-const client_id = getRequiredEnv('KOMMO_CLIENT_ID');
-const client_secret = getRequiredEnv('KOMMO_CLIENT_SECRET');
-const redirect_uri = getRequiredEnv('KOMMO_REDIRECT_URI');
-
 // --- ROTAS DO FLUXO OAUTH KOMMO --- //
 
 /**
@@ -41,6 +27,9 @@ const redirect_uri = getRequiredEnv('KOMMO_REDIRECT_URI');
  */
 app.get('/auth/kommo/connect', (req: Request, res: Response) => {
   try {
+    const client_id = process.env.KOMMO_CLIENT_ID;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI;
+
     const { empresa_id } = req.query;
 
     if (!empresa_id || typeof empresa_id !== 'string') {
@@ -49,7 +38,10 @@ app.get('/auth/kommo/connect', (req: Request, res: Response) => {
     }
 
     if (!client_id || !redirect_uri) {
-      res.status(500).json({ error: 'Faltam credenciais do Kommo Hub no servidor (.env).' });
+      res.status(500).json({ 
+        error: 'Faltam credenciais do Kommo Hub no servidor (.env).',
+        details: { hasClientId: !!client_id, hasRedirectUri: !!redirect_uri }
+      });
       return;
     }
 
@@ -78,14 +70,22 @@ app.get('/auth/kommo/connect', (req: Request, res: Response) => {
  */
 app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
   try {
-    // A documentação pede 'subdomain'. Kommo frequentemente manda via 'referer' ex: (meusubdominio.kommo.com)
-    // Vamos capturar ambos para maior robustez, porém focado em 'subdomain' como pedido.
     const code = req.query.code as string;
     const state = req.query.state as string;
     const referer = req.query.referer as string; 
     let subdomain = req.query.subdomain as string;
 
+    // Buscando as variáveis direto aqui dentro também 💡
+    const client_id = process.env.KOMMO_CLIENT_ID;
+    const client_secret = process.env.KOMMO_CLIENT_SECRET;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI;
+
     const empresa_id = state;
+
+    if (!client_id || !client_secret || !redirect_uri) {
+      res.status(500).send('Faltam credenciais do Kommo Hub no servidor (.env).');
+      return;
+    }
 
     if (!code || !empresa_id) {
        res.status(400).send('Parâmetros "code" e "state (empresa_id)" são obrigatórios.');
