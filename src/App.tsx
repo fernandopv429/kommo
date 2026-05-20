@@ -4,25 +4,38 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Network, Database, Link as ShieldCheck, ExternalLink, RefreshCw } from 'lucide-react';
+import axios from 'axios';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle } from 'lucide-react';
+
+interface Connection {
+  id: string;
+  empresa_id: string;
+  account_name: string | null;
+  kommo_subdomain: string;
+  expires_at: string;
+  updated_at: string;
+}
 
 export default function App() {
   const [empresaId, setEmpresaId] = useState('');
-  const [connections, setConnections] = useState<{ id: string; empresa_id: string; kommo_subdomain: string; expires_at: string; updated_at: string }[]>([]);
+  const [activeConnections, setActiveConnections] = useState<Connection[]>([]);
+  const [inactiveConnections, setInactiveConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/connections');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setConnections(data);
-      }
+      const [activeRes, inactiveRes] = await Promise.all([
+        axios.get<Connection[]>('/api/connections/active'),
+        axios.get<Connection[]>('/api/connections/inactive'),
+      ]);
+      setActiveConnections(activeRes.data);
+      setInactiveConnections(inactiveRes.data);
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao buscar as conexões:', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -31,95 +44,173 @@ export default function App() {
 
   const handleConnect = () => {
     if (!empresaId) return alert('Por favor, informe o ID da Empresa');
-    // Redireciona o lojista/usuário para a Rota 1 
     window.location.href = `/auth/kommo/connect?empresa_id=${empresaId}`;
   };
 
+  const toggleStatus = async (id: string) => {
+    try {
+      await axios.patch(`/api/connections/${id}/toggle-status`);
+      await fetchConnections();
+    } catch (error) {
+      console.error('Erro ao alterar status:', error);
+      alert('Não foi possível alterar o status da conexão.');
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
+
   return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-100 p-8 font-sans">
-      <div className="max-w-4xl mx-auto space-y-12">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-12">
         {/* Header */}
-        <header className="flex items-center gap-4 border-b border-neutral-800 pb-6">
-          <div className="p-3 bg-blue-600/20 rounded-xl">
-            <Network className="w-8 h-8 text-blue-500" />
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-zinc-800 pb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
+              <Network className="w-8 h-8 text-blue-500" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">Hub de Integrações</h1>
+              <p className="text-zinc-400 mt-1">Gerenciador OAuth 2.0 Kommo (Multi-tenant)</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Hub de Integrações</h1>
-            <p className="text-neutral-400 mt-1">Gerenciador OAuth 2.0 Kommo (Multi-tenant)</p>
+
+          <div className="flex items-center gap-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+            <input
+              type="text"
+              value={empresaId}
+              onChange={(e) => setEmpresaId(e.target.value)}
+              placeholder="Tenant ID (ex: emp-123)"
+              className="bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-2 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all w-56"
+            />
+            <button
+              onClick={handleConnect}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Nova Conexão
+            </button>
           </div>
         </header>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Card Configurar Nova Conexão */}
-          <div className="bg-neutral-800/40 border border-neutral-700/50 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-xl font-medium mb-4 flex items-center gap-2">
-              <ExternalLink className="w-5 h-5 text-neutral-400" />
-              Nova Conexão Kommo
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+              Status das Conexões
             </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-400 mb-2">
-                  ID da Empresa (Tenant ID)
-                </label>
-                <input
-                  type="text"
-                  value={empresaId}
-                  onChange={(e) => setEmpresaId(e.target.value)}
-                  placeholder="ex: tenant-12345"
-                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-4 py-2.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-              <button
-                onClick={handleConnect}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                Conectar Kommo
-              </button>
-            </div>
-            <p className="text-xs text-neutral-500 mt-4 leading-relaxed">
-              O administrador da empresa será direcionado ao portal da Kommo para autorizar o acesso. Certifique-se que as chaves de API estão configuradas no .env.
-            </p>
+            <button
+              onClick={fetchConnections}
+              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 rounded-lg text-sm transition-colors text-zinc-300"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar Listas
+            </button>
           </div>
 
-          {/* Card Listagem Banco de Dados */}
-          <div className="bg-neutral-800/40 border border-neutral-700/50 rounded-2xl p-6 shadow-xl flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-medium flex items-center gap-2">
-                <Database className="w-5 h-5 text-emerald-500" />
-                Conexões Ativas
-              </h2>
-              <button onClick={fetchConnections} className="p-2 hover:bg-neutral-700 rounded-lg transition-colors" title="Atualizar">
-                <RefreshCw className={`w-4 h-4 text-neutral-400 ${loading ? 'animate-spin' : ''}`} />
-              </button>
+          {/* Tabela Ativas */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex items-center gap-2">
+               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+               <h3 className="text-lg font-medium text-emerald-100">Conexões Ativas</h3>
             </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {connections.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-neutral-500 text-sm">
-                  Nenhuma conexão registrada.
-                </div>
-              ) : (
-                connections.map((conn, idx) => (
-                  <div key={idx} className="bg-neutral-900/50 border border-neutral-700/50 rounded-lg p-4 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-blue-400" />
-                        {conn.empresa_id}
-                      </p>
-                      <p className="text-sm text-neutral-500 mt-1">
-                        Subdomínio: <span className="text-neutral-300">{conn.kommo_subdomain}.kommo.com</span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Ativa
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-zinc-400">
+                <thead className="bg-zinc-950/50 text-xs uppercase font-medium text-zinc-500 border-b border-zinc-800">
+                  <tr>
+                    <th className="px-6 py-4">Tenant ID</th>
+                    <th className="px-6 py-4">Nome Identificador</th>
+                    <th className="px-6 py-4">Subdomínio Kommo</th>
+                    <th className="px-6 py-4">Expira Em</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {activeConnections.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
+                        Nenhuma conexão ativa no momento.
+                      </td>
+                    </tr>
+                  ) : (
+                    activeConnections.map((conn) => (
+                      <tr key={conn.id} className="hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-zinc-200">{conn.empresa_id}</td>
+                        <td className="px-6 py-4">{conn.account_name || '-'}</td>
+                        <td className="px-6 py-4">{conn.kommo_subdomain}.kommo.com</td>
+                        <td className="px-6 py-4">{formatDate(conn.expires_at)}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => toggleStatus(conn.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                          >
+                            <Pause className="w-3.5 h-3.5" />
+                            Pausar / Desativar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+
+          {/* Tabela Inativas */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
+            <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 flex items-center gap-2">
+               <XCircle className="w-5 h-5 text-zinc-500" />
+               <h3 className="text-lg font-medium text-zinc-300">Conexões Inativas / Pausadas</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-zinc-400">
+                <thead className="bg-zinc-950/50 text-xs uppercase font-medium text-zinc-500 border-b border-zinc-800">
+                  <tr>
+                    <th className="px-6 py-4">Tenant ID</th>
+                    <th className="px-6 py-4">Nome Identificador</th>
+                    <th className="px-6 py-4">Subdomínio Kommo</th>
+                    <th className="px-6 py-4">Última Atualização</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {inactiveConnections.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
+                        Nenhuma conexão inativa.
+                      </td>
+                    </tr>
+                  ) : (
+                    inactiveConnections.map((conn) => (
+                      <tr key={conn.id} className="hover:bg-zinc-800/50 transition-colors bg-zinc-950/20">
+                        <td className="px-6 py-4 font-medium text-zinc-400">{conn.empresa_id}</td>
+                        <td className="px-6 py-4 text-zinc-500">{conn.account_name || '-'}</td>
+                        <td className="px-6 py-4 text-zinc-500">{conn.kommo_subdomain}.kommo.com</td>
+                        <td className="px-6 py-4 text-zinc-500">{formatDate(conn.updated_at)}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => toggleStatus(conn.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            Reativar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
