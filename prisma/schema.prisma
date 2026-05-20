@@ -8,17 +8,15 @@ datasource db {
 }
 
 model KommoConnection {
-  id               String   @id @default(uuid())
-  empresa_id       String
-  kommo_subdomain  String
-  kommo_account_id String   @unique // The unique identifier for a Kommo account
-  account_name     String?
-  is_active        Boolean  @default(true)
-  access_token     String   @db.Text
-  refresh_token    String   @db.Text
-  expires_at       DateTime
-  updated_at       DateTime @updatedAt
-  created_at       DateTime @default(now())
-
-  @@map("kommo_connections")
+  id              String   @id @default(uuid())
+  tenantId        String   // ID do usuário/empresa no meu sistema
+  accountName     String?  // Nome da Empresa retornado pela Kommo
+  kommoAccountId  String   @unique // ID interno da conta na Kommo
+  kommoSubdomain  String
+  accessToken     String
+  refreshToken    String
+  expiresAt       DateTime
+  isActive        Boolean  @default(true) // Controle de Ativo/Inativo
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
 }

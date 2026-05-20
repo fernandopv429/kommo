@@ -9,11 +9,13 @@ import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle } 
 
 interface Connection {
   id: string;
-  empresa_id: string;
-  account_name: string | null;
-  kommo_subdomain: string;
-  expires_at: string;
-  updated_at: string;
+  tenantId: string;
+  accountName: string | null;
+  kommoSubdomain: string;
+  kommoAccountId: string;
+  isActive: boolean;
+  expiresAt: string;
+  updatedAt: string;
 }
 
 export default function App() {
@@ -25,12 +27,10 @@ export default function App() {
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      const [activeRes, inactiveRes] = await Promise.all([
-        axios.get<Connection[]>('/api/connections/active'),
-        axios.get<Connection[]>('/api/connections/inactive'),
-      ]);
-      setActiveConnections(activeRes.data);
-      setInactiveConnections(inactiveRes.data);
+      const res = await axios.get<Connection[]>('/api/connections');
+      const allConns = res.data;
+      setActiveConnections(allConns.filter(c => c.isActive));
+      setInactiveConnections(allConns.filter(c => !c.isActive));
     } catch (e) {
       console.error('Erro ao buscar as conexões:', e);
     } finally {
@@ -49,7 +49,7 @@ export default function App() {
 
   const toggleStatus = async (id: string) => {
     try {
-      await axios.patch(`/api/connections/${id}/toggle-status`);
+      await axios.patch(`/api/connections/${id}/toggle`);
       await fetchConnections();
     } catch (error) {
       console.error('Erro ao alterar status:', error);
@@ -142,10 +142,10 @@ export default function App() {
                   ) : (
                     activeConnections.map((conn) => (
                       <tr key={conn.id} className="hover:bg-zinc-800/50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-zinc-200">{conn.empresa_id}</td>
-                        <td className="px-6 py-4">{conn.account_name || '-'}</td>
-                        <td className="px-6 py-4">{conn.kommo_subdomain}.kommo.com</td>
-                        <td className="px-6 py-4">{formatDate(conn.expires_at)}</td>
+                        <td className="px-6 py-4 font-medium text-zinc-200">{conn.tenantId}</td>
+                        <td className="px-6 py-4">{conn.accountName || '-'}</td>
+                        <td className="px-6 py-4">{conn.kommoSubdomain}.kommo.com</td>
+                        <td className="px-6 py-4">{formatDate(conn.expiresAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => toggleStatus(conn.id)}
@@ -190,10 +190,10 @@ export default function App() {
                   ) : (
                     inactiveConnections.map((conn) => (
                       <tr key={conn.id} className="hover:bg-zinc-800/50 transition-colors bg-zinc-950/20">
-                        <td className="px-6 py-4 font-medium text-zinc-400">{conn.empresa_id}</td>
-                        <td className="px-6 py-4 text-zinc-500">{conn.account_name || '-'}</td>
-                        <td className="px-6 py-4 text-zinc-500">{conn.kommo_subdomain}.kommo.com</td>
-                        <td className="px-6 py-4 text-zinc-500">{formatDate(conn.updated_at)}</td>
+                        <td className="px-6 py-4 font-medium text-zinc-400">{conn.tenantId}</td>
+                        <td className="px-6 py-4 text-zinc-500">{conn.accountName || '-'}</td>
+                        <td className="px-6 py-4 text-zinc-500">{conn.kommoSubdomain}.kommo.com</td>
+                        <td className="px-6 py-4 text-zinc-500">{formatDate(conn.updatedAt)}</td>
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => toggleStatus(conn.id)}
