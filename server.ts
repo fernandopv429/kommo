@@ -192,7 +192,7 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
   }
 });
 
-// 3. ROTA DE LISTAGEM DE CONTAS
+// 3. ROTA DE LISTAGEM DE CONTAS (Todas)
 app.get('/api/connections', async (req: Request, res: Response) => {
   try {
     const connections = await prisma.kommoConnection.findMany({
@@ -203,7 +203,33 @@ app.get('/api/connections', async (req: Request, res: Response) => {
           kommoSubdomain: true,
           kommoAccountId: true,
           isActive: true,
-          expiresAt: true
+          expiresAt: true,
+          updatedAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(connections);
+  } catch (e: unknown) {
+    const err = e as Error;
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3.1 ROTA DE LISTAGEM DE CONTAS DO TENANT
+app.get('/api/tenants/:tenant_id/accounts', async (req: Request, res: Response) => {
+  try {
+    const { tenant_id } = req.params;
+    const connections = await prisma.kommoConnection.findMany({
+      where: { tenantId: tenant_id },
+      select: {
+          id: true,
+          tenantId: true,
+          accountName: true,
+          kommoSubdomain: true,
+          kommoAccountId: true,
+          isActive: true,
+          expiresAt: true,
+          updatedAt: true
       },
       orderBy: { createdAt: 'desc' }
     });
