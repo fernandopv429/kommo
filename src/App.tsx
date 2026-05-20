@@ -5,7 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone } from 'lucide-react';
+import WhatsAppConnection from './components/WhatsAppConnection';
 
 interface Connection {
   id: string;
@@ -23,6 +24,7 @@ export default function App() {
   const [activeConnections, setActiveConnections] = useState<Connection[]>([]);
   const [inactiveConnections, setInactiveConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedTenantForQR, setSelectedTenantForQR] = useState<string | null>(null);
 
   const fetchConnections = async () => {
     setLoading(true);
@@ -146,7 +148,14 @@ export default function App() {
                         <td className="px-6 py-4">{conn.accountName || '-'}</td>
                         <td className="px-6 py-4">{conn.kommoSubdomain}.kommo.com</td>
                         <td className="px-6 py-4">{formatDate(conn.expiresAt)}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right space-x-2">
+                          <button
+                            onClick={() => setSelectedTenantForQR(conn.tenantId)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                          >
+                            <Smartphone className="w-3.5 h-3.5" />
+                            WhatsApp QR
+                          </button>
                           <button
                             onClick={() => toggleStatus(conn.id)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
@@ -213,6 +222,15 @@ export default function App() {
 
         </div>
       </div>
+
+      {selectedTenantForQR && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
+          <WhatsAppConnection 
+            tenantId={selectedTenantForQR} 
+            onClose={() => setSelectedTenantForQR(null)} 
+          />
+        </div>
+      )}
     </div>
   );
 }

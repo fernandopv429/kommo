@@ -20,3 +20,16 @@ model KommoConnection {
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 }
+
+model InteractionLog {
+  id              String   @id @default(uuid())
+  tenantId        String   // ID do cliente/empresa dono do fluxo
+  leadId          String?  // ID do lead na Kommo
+  whatsappNumber  String   // Telefone do cliente
+  incomingMessage String   // O que o cliente digitou no WhatsApp
+  aiResponse      String?  // O que a IA respondeu (se houver)
+  actionTaken     String?  // Ex: "Moveu para etapa X", "Apenas respondeu"
+  status          String   // "SUCCESS" ou "ERROR"
+  errorMessage    String?  // Detalhes técnico caso falhe
+  createdAt       DateTime @default(now())
+}
