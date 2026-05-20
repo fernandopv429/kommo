@@ -8,7 +8,7 @@ import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { createServer as createViteServer } from 'vite';
 import cron from 'node-cron';
-import { refreshKommoToken, ensureValidKommoToken } from './src/lib/kommo-auth';
+import { refreshKommoToken, ensureValidKommoToken, registerKommoWebhook } from './src/lib/kommo-auth';
 
 const app = express();
 const PORT = 3000;
@@ -166,6 +166,9 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
 
     console.log(`[Kommo OAuth] Tokens da conta ${kommoAccountId} (tenant ${tenantId}) salvos com sucesso.`);
 
+    // 2. CHAMADA AUTOMÁTICA NO CALLBACK (Registrar Webhook)
+    await registerKommoWebhook(kommoAccountId);
+
     res.send(`
       <html>
         <head><title>Integração Concluída</title></head>
@@ -317,12 +320,14 @@ app.post('/api/webhooks/kommo', async (req: Request, res: Response) => {
     }
 
     // Disparo pro N8N
+    const leadId = req.body['leads[status][0][id]'] || req.body['leads[add][0][id]'];
+    const statusId = req.body['leads[status][0][status_id]'] || req.body['leads[add][0][status_id]'];
+
     const payloadToN8n = {
-      tenant_id: connection.tenantId,
-      kommo_account_id: kommoAccountId,
+      lead_id: leadId,
+      status_id: statusId,
       subdomain: connection.kommoSubdomain,
-      access_token: connection.accessToken,
-      event_data: req.body
+      access_token: connection.accessToken
     };
 
     axios.post(n8nUrl, payloadToN8n).catch(err => {

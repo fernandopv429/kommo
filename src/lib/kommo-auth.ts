@@ -135,3 +135,54 @@ export async function ensureValidKommoToken(req: Request, res: Response, next: N
     res.status(500).json({ error: 'Erro interno ao validar/renovar o token da Kommo' });
   }
 }
+
+/**
+ * 3. FUNÇÃO DE REGISTRO DE WEBHOOK
+ * Registra o webhook na Kommo para receber atualizações de leads
+ */
+export async function registerKommoWebhook(kommoAccountId: string): Promise<void> {
+  try {
+    const connection = await prisma.kommoConnection.findUnique({
+      where: { kommoAccountId },
+    });
+
+    if (!connection) {
+      throw new Error(`Conexão Kommo não encontrada para a conta ${kommoAccountId}.`);
+    }
+
+    const { accessToken, kommoSubdomain } = connection;
+    
+    // Utilize a URL do app se disponível, senão fallback p/ a URL do seu painel
+    const destination = process.env.APP_URL 
+      ? `${process.env.APP_URL.trim()}/api/webhooks/kommo`
+      : "https://tarif.nexusdevhub.com/api/webhooks/kommo";
+
+    const webhookUrl = `https://${kommoSubdomain}.kommo.com/api/v4/webhooks`;
+
+    const payload = {
+      destination,
+      settings: [
+        "add_lead",
+        "status_lead"
+      ]
+    };
+
+    console.log(`[Webhook Register] Registrando webhook para conta ${kommoAccountId} no destino ${destination}...`);
+
+    await axios.post(webhookUrl, payload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      }
+    });
+
+    console.log(`[Webhook Register] Webhook cadastrado com sucesso para a conta ${kommoAccountId}.`);
+  } catch (error: any) {
+    // Trata caso a Kommo responda que já existe
+    if (error.response?.data && JSON.stringify(error.response.data).includes('already exists')) {
+      console.log(`[Webhook Register] O webhook já estava cadastrado para a conta ${kommoAccountId}.`);
+    } else {
+      console.error(`[Webhook Register] Erro ao cadastrar webhook para ${kommoAccountId}:`, error.response?.data || error.message);
+    }
+  }
+}
