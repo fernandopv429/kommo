@@ -28,7 +28,7 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
         } else if (data.status === 'SCAN_QR') {
           setStatus('SCAN_QR');
           setQrCode(data.qrcode);
-        } else if (data.status === 'PENDING') {
+        } else if (data.status === 'PENDING' || data.status === 'CREATING') {
           setStatus('LOADING');
         }
       } catch (error) {

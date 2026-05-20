@@ -14,32 +14,39 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFL
 const EVOLUTION_URL = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
 
 async function createEvolutionInstance(tenantId: string) {
+  const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
+  const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
+
   try {
-    console.log(`[Evolution] Tentando criar instância para o tenant ${tenantId}...`);
-    await axios.post(`${EVOLUTION_URL}/instance/create`, {
-      instanceName: tenantId,
-      token: "",
-      number: "",
-      integration: "WHATSAPP-BAILEYS",
-      reject_call: false,
-      groups_ignore: true,
-      always_online: true,
-      read_messages: true,
-      read_status: false
-    }, {
-      headers: {
-        "apikey": EVOLUTION_API_KEY,
-        "Content-Type": "application/json"
+    console.log(`[Evolution] Solicitando criação da instância: ${tenantId}`);
+    const response = await axios.post(
+      `${EVOLUTION_URL_EXEC}/instance/create`,
+      {
+        instanceName: tenantId,
+        integration: "WHATSAPP-BAILEYS",
+        alwaysOnline: true,
+        readMessages: true,
+        readStatus: false,
+        rejectCall: false,
+        groupsIgnore: true
+      },
+      {
+        headers: {
+          "apikey": EVOLUTION_API_KEY_EXEC,
+          "Content-Type": "application/json"
+        }
       }
-    });
+    );
     console.log(`[Evolution] Instância '${tenantId}' criada com sucesso.`);
+    return response.data;
   } catch (error: any) {
     const errorData = error.response?.data;
     if (error.response?.status === 400 || (typeof errorData?.message === 'string' && errorData.message.includes('A instância já existe') || JSON.stringify(errorData).includes('already exists'))) {
-      console.log(`[Evolution] A instância '${tenantId}' já estava criada. Ignorando.`);
-    } else {
-      console.error(`[Evolution] Erro ao criar instância '${tenantId}':`, errorData || error.message);
+      console.log(`[Evolution] Instância ${tenantId} já mapeada no servidor.`);
+      return { status: "EXISTS" };
     }
+    console.error(`[Evolution] Erro na criação do container para '${tenantId}':`, errorData || error.message);
+    throw error;
   }
 }
 
@@ -607,16 +614,22 @@ app.get('/api/tenants/:tenant_id/qrcode', async (req: Request, res: Response) =>
       return;
     }
 
-    const qrCodeBase64 = data.base64 || data.code || data.qrcode;
+    const qrCodeBase64 = data.base64 || data.code || data.qrcode || data.instance?.qr;
 
     if (qrCodeBase64) {
       res.json({ status: "SCAN_QR", qrcode: qrCodeBase64 });
     } else {
-      res.json({ status: "PENDING", details: data });
+      res.json({ status: "CREATING", details: data }); // Modificado para CREATING para que o front polling entenda
     }
   } catch (error: any) {
     const errorData = error.response?.data;
     const msg = typeof errorData?.message === 'string' ? errorData.message.toLowerCase() : '';
+
+    // Se no connect retornar 404, significa que a instância ainda não terminou de subir ou não existe
+    if (error.response?.status === 404 || msg.includes('does not exist')) {
+      res.json({ status: "CREATING" });
+      return;
+    }
 
     // Tratar se a API der erro indicando que já está conectada/aberta
     if (msg.includes('open') || msg.includes('connected') || msg.includes('already connected')) {
