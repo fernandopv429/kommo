@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model KommoConnection {
+  id             String   @id @default(uuid())
+  empresa_id     String   @unique
+  kommo_subdomain String
+  access_token   String   @db.Text
+  refresh_token  String   @db.Text
+  expires_at     DateTime
+  updated_at     DateTime @updatedAt
+  created_at     DateTime @default(now())
+
+  @@map("kommo_connections")
+}
