@@ -627,6 +627,12 @@ app.get('/api/tenants/:tenant_id/qrcode', async (req: Request, res: Response) =>
 
     // Se no connect retornar 404, significa que a instância ainda não terminou de subir ou não existe
     if (error.response?.status === 404 || msg.includes('does not exist')) {
+      console.log(`[Evolution] Instância '${req.params.tenant_id}' não encontrada. Iniciando criação...`);
+      try {
+        await createEvolutionInstance(req.params.tenant_id);
+      } catch (createError) {
+        console.error(`[Evolution] Falha ao tentar criar a instância automaticamente:`, createError);
+      }
       res.json({ status: "CREATING" });
       return;
     }
