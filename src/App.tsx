@@ -25,16 +25,20 @@ export default function App() {
   const [inactiveConnections, setInactiveConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTenantForQR, setSelectedTenantForQR] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fetchConnections = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const res = await axios.get<Connection[]>('/api/connections');
       const allConns = res.data;
       setActiveConnections(allConns.filter(c => c.isActive));
       setInactiveConnections(allConns.filter(c => !c.isActive));
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro ao buscar as conexões:', e);
+      const backendError = e.response?.data?.error || e.message;
+      setErrorMessage(`Erro de conexão: ${backendError}`);
     } finally {
       setLoading(false);
     }
@@ -102,6 +106,13 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {errorMessage && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start gap-3">
+            <XCircle className="w-5 h-5 mt-0.5 shrink-0" />
+            <div className="whitespace-pre-wrap font-mono text-sm">{errorMessage}</div>
+          </div>
+        )}
 
         <div className="space-y-8">
           <div className="flex items-center justify-between">
