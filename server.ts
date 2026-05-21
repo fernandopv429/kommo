@@ -17,6 +17,8 @@ async function createEvolutionInstance(tenantId: string) {
   const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
   const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 
+  let createdResponse = null;
+
   try {
     console.log(`[Evolution] Solicitando criação da instância: ${tenantId}`);
     const response = await axios.post(
@@ -38,16 +40,45 @@ async function createEvolutionInstance(tenantId: string) {
       }
     );
     console.log(`[Evolution] Instância '${tenantId}' criada com sucesso.`);
-    return response.data;
+    createdResponse = response.data;
   } catch (error: any) {
     const errorData = error.response?.data;
     if (error.response?.status === 400 || (typeof errorData?.message === 'string' && errorData.message.includes('A instância já existe') || JSON.stringify(errorData).includes('already exists'))) {
       console.log(`[Evolution] Instância ${tenantId} já mapeada no servidor.`);
-      return { status: "EXISTS" };
+      createdResponse = { status: "EXISTS" };
+    } else {
+      console.error(`[Evolution] Erro na criação do container para '${tenantId}':`, errorData || error.message);
+      throw error;
     }
-    console.error(`[Evolution] Erro na criação do container para '${tenantId}':`, errorData || error.message);
-    throw error;
   }
+
+  // Registrar automaticamente o Webhook na v2
+  try {
+    console.log(`[Evolution] Configurando Webhook para a instância: ${tenantId}`);
+    await axios.post(
+      `${EVOLUTION_URL_EXEC}/webhook/instance/set`,
+      {
+        url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
+        enabled: true,
+        byEvents: false,
+        base64: false,
+        events: [
+          "MESSAGES_UPSERT"
+        ]
+      },
+      {
+        headers: {
+          "apikey": EVOLUTION_API_KEY_EXEC,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    console.log(`[Evolution] Webhook configurado com sucesso para a instância '${tenantId}'.`);
+  } catch (webhookError: any) {
+    console.error(`[Evolution] Falha ao configurar webhook para '${tenantId}':`, webhookError.response?.data || webhookError.message);
+  }
+
+  return createdResponse;
 }
 
 const app = express();
@@ -393,11 +424,27 @@ app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Re
     const { kommoAccountId } = req.params;
     const body = req.body;
 
-    const mensagem_whatsapp = body?.mensagem_whatsapp || '';
-    const telefone_whatsapp = body?.telefone_whatsapp || '';
+    // Verificar se a mensagem foi enviada por nós mesmos (fromMe)
+    if (body?.data?.key?.fromMe === true) {
+      res.status(200).send('Ignored self message');
+      return;
+    }
 
-    if (!telefone_whatsapp) {
-      res.status(400).send('O campo telefone_whatsapp é obrigatório.');
+    // Extrair o JID remoto e limpar
+    const rawRemoteJid = body?.data?.key?.remoteJid || '';
+    const telefone_whatsapp = rawRemoteJid.replace(/[^0-9]/g, '');
+
+    // Extrair a mensagem dependendo do tipo (texto simples ou estendido/midia)
+    const messageObj = body?.data?.message || {};
+    const mensagem_whatsapp = 
+      messageObj.conversation || 
+      messageObj.extendedTextMessage?.text || 
+      messageObj.imageMessage?.caption || 
+      messageObj.videoMessage?.caption || 
+      '';
+
+    if (!telefone_whatsapp || !mensagem_whatsapp) {
+      res.status(400).send('Dados de telefone ou mensagem ausentes ou inválidos.');
       return;
     }
 
