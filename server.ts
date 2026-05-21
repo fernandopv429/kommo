@@ -19,6 +19,33 @@ async function createEvolutionInstance(tenantId: string) {
 
   let createdResponse = null;
 
+  const setWebhook = async () => {
+    console.log(`[Evolution] Configurando Webhook para a instância: ${tenantId}`);
+    try {
+      await axios.post(
+        `${EVOLUTION_URL_EXEC}/webhook/instance/set`,
+        {
+          url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
+          enabled: true,
+          byEvents: false,
+          base64: false,
+          events: [
+            "MESSAGES_UPSERT"
+          ]
+        },
+        {
+          headers: {
+            "apikey": EVOLUTION_API_KEY_EXEC,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+      console.log(`[Evolution] Webhook configurado com sucesso para a instância '${tenantId}'.`);
+    } catch (webhookError: any) {
+      console.error(`[Evolution] Falha ao configurar webhook para '${tenantId}':`, webhookError.response?.data || webhookError.message);
+    }
+  };
+
   try {
     console.log(`[Evolution] Solicitando criação da instância: ${tenantId}`);
     const response = await axios.post(
@@ -41,41 +68,17 @@ async function createEvolutionInstance(tenantId: string) {
     );
     console.log(`[Evolution] Instância '${tenantId}' criada com sucesso.`);
     createdResponse = response.data;
+    await setWebhook(); // Configura após sucesso
   } catch (error: any) {
     const errorData = error.response?.data;
     if (error.response?.status === 400 || (typeof errorData?.message === 'string' && errorData.message.includes('A instância já existe') || JSON.stringify(errorData).includes('already exists'))) {
       console.log(`[Evolution] Instância ${tenantId} já mapeada no servidor.`);
       createdResponse = { status: "EXISTS" };
+      await setWebhook(); // Configura se já existir para garantir o vínculo
     } else {
       console.error(`[Evolution] Erro na criação do container para '${tenantId}':`, errorData || error.message);
       throw error;
     }
-  }
-
-  // Registrar automaticamente o Webhook na v2
-  try {
-    console.log(`[Evolution] Configurando Webhook para a instância: ${tenantId}`);
-    await axios.post(
-      `${EVOLUTION_URL_EXEC}/webhook/instance/set`,
-      {
-        url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
-        enabled: true,
-        byEvents: false,
-        base64: false,
-        events: [
-          "MESSAGES_UPSERT"
-        ]
-      },
-      {
-        headers: {
-          "apikey": EVOLUTION_API_KEY_EXEC,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-    console.log(`[Evolution] Webhook configurado com sucesso para a instância '${tenantId}'.`);
-  } catch (webhookError: any) {
-    console.error(`[Evolution] Falha ao configurar webhook para '${tenantId}':`, webhookError.response?.data || webhookError.message);
   }
 
   return createdResponse;
@@ -431,17 +434,11 @@ app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Re
     }
 
     // Extrair o JID remoto e limpar
-    const rawRemoteJid = body?.data?.key?.remoteJid || '';
-    const telefone_whatsapp = rawRemoteJid.replace(/[^0-9]/g, '');
+    const remoteJid = req.body.data?.key?.remoteJid || '';
+    const telefone_whatsapp = remoteJid.replace(/@s\.whatsapp\.net/g, '').replace(/\D/g, '');
 
     // Extrair a mensagem dependendo do tipo (texto simples ou estendido/midia)
-    const messageObj = body?.data?.message || {};
-    const mensagem_whatsapp = 
-      messageObj.conversation || 
-      messageObj.extendedTextMessage?.text || 
-      messageObj.imageMessage?.caption || 
-      messageObj.videoMessage?.caption || 
-      '';
+    const mensagem_whatsapp = req.body.data?.message?.conversation || req.body.data?.message?.extendedTextMessage?.text || '';
 
     if (!telefone_whatsapp || !mensagem_whatsapp) {
       res.status(400).send('Dados de telefone ou mensagem ausentes ou inválidos.');
