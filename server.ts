@@ -20,14 +20,14 @@ async function createEvolutionInstance(tenantId: string) {
   let createdResponse = null;
 
   const setWebhook = async () => {
-    console.log(`[Evolution] Configurando Webhook para a instância: ${tenantId}`);
+    console.log(`[Evolution] Configurando Webhook Centralizador para a instância: ${tenantId}`);
     try {
       await axios.post(
-        `${EVOLUTION_URL_EXEC}/webhook/set/${tenantId}`,
+        `${EVOLUTION_URL_EXEC}/webhook/instance/${tenantId}`,
         {
           enabled: true,
           url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
-          webhookByEvents: false,
+          webhookByEvents: true,
           webhookBase64: false,
           events: [
             "MESSAGES_UPSERT"
@@ -40,7 +40,7 @@ async function createEvolutionInstance(tenantId: string) {
           }
         }
       );
-      console.log(`[Evolution] Webhook configurado com sucesso para a instância '${tenantId}'.`);
+      console.log(`[Evolution] Webhook centralizador configurado com sucesso para a instância '${tenantId}'.`);
     } catch (webhookError: any) {
       console.error(`[Evolution] Falha ao configurar webhook para '${tenantId}':`, webhookError.response?.data || webhookError.message);
     }
@@ -420,42 +420,37 @@ app.post('/api/webhooks/kommo', async (req: Request, res: Response) => {
 
 /**
  * 5. WEBHOOK EVOLUTION API
- * POST /api/webhooks/evolution/:kommoAccountId
+ * POST /api/webhooks/evolution/:tenantId
  */
-app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Response) => {
+app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response) => {
   try {
-    const { kommoAccountId } = req.params;
+    const { tenantId } = req.params;
     const body = req.body;
 
     // Verificar se a mensagem foi enviada por nós mesmos (fromMe)
-    if (body?.data?.key?.fromMe === true) {
+    if (body?.data?.key?.fromMe === true || body?.data?.fromMe === true) {
       res.status(200).send('Ignored self message');
       return;
     }
 
     // Extrair o JID remoto e limpar
-    const remoteJid = req.body.data?.key?.remoteJid || '';
+    const remoteJid = body.data?.key?.remoteJid || '';
     const telefone_whatsapp = remoteJid.replace(/@s\.whatsapp\.net/g, '').replace(/\D/g, '');
 
     // Extrair a mensagem dependendo do tipo (texto simples ou estendido/midia)
-    const mensagem_whatsapp = req.body.data?.message?.conversation || req.body.data?.message?.extendedTextMessage?.text || '';
+    const mensagem_whatsapp = body.data?.message?.conversation || body.data?.message?.extendedTextMessage?.text || '';
 
     if (!telefone_whatsapp || !mensagem_whatsapp) {
       res.status(400).send('Dados de telefone ou mensagem ausentes ou inválidos.');
       return;
     }
 
-    const connection = await prisma.kommoConnection.findUnique({
-      where: { kommoAccountId }
+    const connection = await prisma.kommoConnection.findFirst({
+      where: { tenantId: tenantId, isActive: true }
     });
 
     if (!connection) {
-      res.status(404).send('Conexão Kommo não encontrada.');
-      return;
-    }
-
-    if (!connection.isActive) {
-      res.status(200).send('Pausado');
+      res.status(404).send('Conexão Kommo não encontrada para este tenant.');
       return;
     }
 
@@ -463,8 +458,8 @@ app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Re
     const now = new Date();
     const timeRemainingMs = connection.expiresAt.getTime() - now.getTime();
     if (timeRemainingMs < 900000) {
-      await refreshKommoToken(kommoAccountId);
-      const updatedConn = await prisma.kommoConnection.findUnique({ where: { kommoAccountId } });
+      await refreshKommoToken(connection.kommoAccountId);
+      const updatedConn = await prisma.kommoConnection.findUnique({ where: { kommoAccountId: connection.kommoAccountId } });
       if (updatedConn) connection.accessToken = updatedConn.accessToken;
     }
 
@@ -558,12 +553,12 @@ app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Re
         lead_existe,
         lead: finalLeadData,
         access_token: connection.accessToken,
-        subdomain: connection.kommoSubdomain
+        subdomain: connection.kommoSubdomain,
+        tenantId: connection.tenantId
       };
 
-      axios.post(n8nUrl, payloadToN8n).catch(err => {
-        console.error('[Evolution] Falha ao enviar para o N8N:', err.message);
-      });
+      await axios.post(n8nUrl, payloadToN8n);
+      console.log(`[Evolution Webhook] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
     } else {
       console.warn('[Evolution] Variavél N8N_WEBHOOK_URL não configurada no servidor.');
     }
@@ -571,7 +566,7 @@ app.post('/api/webhooks/evolution/:kommoAccountId', async (req: Request, res: Re
     res.status(200).send('OK');
 
   } catch (error: any) {
-    console.error('[Evolution] Erro crítico:', error.message);
+    console.error('[Evolution Webhook] Erro crítico:', error.message);
     res.status(500).send('Internal Error');
   }
 });
