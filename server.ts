@@ -23,12 +23,12 @@ async function createEvolutionInstance(tenantId: string) {
     console.log(`[Evolution] Configurando Webhook para a instância: ${tenantId}`);
     try {
       await axios.post(
-        `${EVOLUTION_URL_EXEC}/webhook/instance/set`,
+        `${EVOLUTION_URL_EXEC}/webhook/set/${tenantId}`,
         {
-          url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
           enabled: true,
-          byEvents: false,
-          base64: false,
+          url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
+          webhookByEvents: false,
+          webhookBase64: false,
           events: [
             "MESSAGES_UPSERT"
           ]
