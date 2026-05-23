@@ -22,11 +22,13 @@ async function createEvolutionInstance(tenantId: string) {
   const setWebhook = async () => {
     console.log(`[Evolution] Configurando Webhook Centralizador para a instância: ${tenantId}`);
     try {
+      const finalUrl = 'https://tarif.nexusdevhub.com';
+
       await axios.post(
         `${EVOLUTION_URL_EXEC}/webhook/instance/${tenantId}`,
         {
           enabled: true,
-          url: `https://tarif.nexusdevhub.com/api/webhooks/evolution/${tenantId}`,
+          url: `${finalUrl}/api/webhooks/evolution/${tenantId}`,
           webhookByEvents: true,
           webhookBase64: false,
           events: [
@@ -40,7 +42,7 @@ async function createEvolutionInstance(tenantId: string) {
           }
         }
       );
-      console.log(`[Evolution] Webhook centralizador configurado com sucesso para a instância '${tenantId}'.`);
+      console.log(`[Evolution] Webhook centralizador configurado com sucesso para a instância '${tenantId}'. URL: ${finalUrl}/api/webhooks/evolution/${tenantId}`);
     } catch (webhookError: any) {
       console.error(`[Evolution] Falha ao configurar webhook para '${tenantId}':`, webhookError.response?.data || webhookError.message);
     }
@@ -161,11 +163,58 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
   };
 
   try {
-    const leadsRes = await axios.get(
-      `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads?query=${encodeURIComponent(telefone_limpo)}&with=contacts`,
-      axiosConfig
-    );
-    const leadsRaw = leadsRes.data?._embedded?.leads;
+    // 1. First, search for contacts matching the phone number
+    let leadIdToFetch: number | null = null;
+    let mainContact: any = null;
+
+    try {
+      const contactsRes = await axios.get(
+        `https://${connection.kommoSubdomain}.kommo.com/api/v4/contacts?query=${encodeURIComponent(telefone_limpo)}&with=leads`,
+        axiosConfig
+      );
+      const contactsRaw = contactsRes.data?._embedded?.contacts;
+      if (Array.isArray(contactsRaw) && contactsRaw.length > 0) {
+        // Find first contact with leads
+        for (const contact of contactsRaw) {
+          const linkedLeads = contact._embedded?.leads;
+          if (Array.isArray(linkedLeads) && linkedLeads.length > 0) {
+            mainContact = contact;
+            leadIdToFetch = linkedLeads[0].id;
+            break;
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.response && err.response.status !== 204) {
+        console.error('[Evolution] Erro ao buscar contatos na Kommo:', err.response?.data || err.message);
+      }
+    }
+
+    let leadsRaw: any[] = [];
+    
+    // 2. Se achou um leadId pelo contato, busca o lead específico
+    if (leadIdToFetch) {
+      try {
+        const leadRes = await axios.get(
+          `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/${leadIdToFetch}?with=contacts`,
+          axiosConfig
+        );
+        if (leadRes.data) {
+          leadsRaw = [leadRes.data];
+        }
+      } catch (err: any) {
+        // fallback
+      }
+    }
+
+    // 3. Se não achou pelos contatos, busca direto em leads (fallback)
+    if (leadsRaw.length === 0) {
+      const leadsRes = await axios.get(
+        `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads?query=${encodeURIComponent(telefone_limpo)}&with=contacts`,
+        axiosConfig
+      );
+      leadsRaw = leadsRes.data?._embedded?.leads || [];
+    }
 
     if (Array.isArray(leadsRaw) && leadsRaw.length > 0) {
       const orderedLeads = leadsRaw.sort((a: any, b: any) => b.updated_at - a.updated_at);
@@ -183,13 +232,18 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
       });
 
       let contatoObj = null;
-      const contactsRaw = latestLead._embedded?.contacts || [];
-      const mainContact = contactsRaw.find((c: any) => c.is_main === true) || contactsRaw[0];
+      
+      // Use mainContact found matching the phone, else find first is_main
+      const contactsRawFallback = latestLead._embedded?.contacts || [];
+      const fallbackContact = contactsRawFallback.find((c: any) => c.is_main === true) || contactsRawFallback[0];
+      const targetContact = mainContact || fallbackContact;
 
-      if (mainContact) {
+      if (targetContact) {
         try {
+          // If we already have the contact populated from the first request, we can use it.
+          // But to be safe and ensure all custom fields, fetch it by ID.
           const contactRes = await axios.get(
-            `https://${connection.kommoSubdomain}.kommo.com/api/v4/contacts/${mainContact.id}`,
+            `https://${connection.kommoSubdomain}.kommo.com/api/v4/contacts/${targetContact.id}`,
             axiosConfig
           );
           const rawContact = contactRes.data;
@@ -851,6 +905,40 @@ app.get('/api/kommo/status', ensureValidKommoToken, (req: Request, res: Response
   const token = (req as any).kommoToken;
   const subdomain = (req as any).kommoSubdomain;
   res.json({ message: 'Token válido!', subdomain, token_preview: token.substring(0, 10) + '...' });
+});
+
+/**
+ * Rota para forçar sincronização do webhook na Evolution manualmente
+ */
+app.post('/api/tenants/:tenant_id/sync-webhook', async (req: Request, res: Response) => {
+  try {
+    const { tenant_id } = req.params;
+    const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
+    const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
+
+    const finalUrl = 'https://tarif.nexusdevhub.com';
+
+    await axios.post(
+      `${EVOLUTION_URL_EXEC}/webhook/instance/${tenant_id}`,
+      {
+        enabled: true,
+        url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
+        webhookByEvents: true,
+        webhookBase64: false,
+        events: ["MESSAGES_UPSERT"]
+      },
+      {
+        headers: {
+          "apikey": EVOLUTION_API_KEY_EXEC,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    res.json({ success: true, message: "Webhook sincronizado com a Evolution", url: `${finalUrl}/api/webhooks/evolution/${tenant_id}` });
+  } catch (error: any) {
+    console.error(`[Evolution] Falha ao sintonizar webhook manual para '${req.params.tenant_id}':`, error.response?.data || error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Inicializar Vite/Server e Cron Job

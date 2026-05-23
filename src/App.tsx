@@ -28,28 +28,41 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
+  const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get('/api/settings/N8N_WEBHOOK_URL');
-      if (res.data?.value) {
-        setWebhookUrl(res.data.value);
+      const resN8N = await axios.get('/api/settings/N8N_WEBHOOK_URL');
+      if (resN8N.data?.value) {
+        setWebhookUrl(resN8N.data.value);
       }
     } catch (e: any) {
       console.error('Erro ao buscar configuração do webhook:', e.message);
     }
   };
 
-  const saveWebhook = async () => {
+  const saveSettings = async () => {
     setSavingWebhook(true);
     try {
       await axios.post('/api/settings', { key: 'N8N_WEBHOOK_URL', value: webhookUrl });
-      alert('Webhook centralizador salvo com sucesso!');
+      alert('Configurações salvas com sucesso!');
     } catch (e: any) {
       console.error('Erro ao salvar webhook:', e.message);
-      alert('Falha ao salvar webhook centralizador.');
+      alert('Falha ao salvar configurações.');
     } finally {
       setSavingWebhook(false);
+    }
+  };
+
+  const handleSyncEvolutionWebhook = async (tenantId: string) => {
+    setSyncingTenant(tenantId);
+    try {
+      await axios.post(`/api/tenants/${tenantId}/sync-webhook`);
+      alert(`Webhook Evolution atualizado/sintonizado com sucesso.`);
+    } catch (e: any) {
+      alert('Erro ao sincronizar webhook na Evolution.');
+    } finally {
+      setSyncingTenant(null);
     }
   };
 
@@ -147,9 +160,9 @@ export default function App() {
             />
           </div>
           <button
-            onClick={saveWebhook}
+            onClick={saveSettings}
             disabled={savingWebhook}
-            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-medium py-2 px-5 rounded transition-colors flex items-center justify-center gap-2 shrink-0 border border-zinc-700"
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-medium py-2 px-5 rounded transition-colors flex items-center justify-center gap-2 shrink-0 border border-zinc-700 h-[38px]"
           >
             {savingWebhook ? <RefreshCw className="w-4 h-4 animate-spin text-zinc-400" /> : <Save className="w-4 h-4 text-zinc-400" />}
             Salvar
@@ -210,7 +223,17 @@ export default function App() {
                         <td className="px-4 py-3 truncate max-w-[150px]">{conn.kommoSubdomain}.kommo.com</td>
                         <td className="px-4 py-3">{formatDate(conn.expiresAt)}</td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex flex-wrap items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleSyncEvolutionWebhook(conn.tenantId)}
+                              disabled={syncingTenant === conn.tenantId}
+                              className="text-zinc-500 hover:text-blue-400 transition-colors flex items-center gap-1.5 text-xs"
+                              title="Sincronizar Webhook Evolution"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${syncingTenant === conn.tenantId ? 'animate-spin' : ''}`} />
+                              Sync
+                            </button>
+                            <span className="text-zinc-800 hidden md:inline">|</span>
                             <button
                               onClick={() => setSelectedTenantForQR(conn.tenantId)}
                               className="text-zinc-500 hover:text-emerald-400 transition-colors flex items-center gap-1.5 text-xs"
