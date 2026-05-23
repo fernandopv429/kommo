@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { QrCode, CheckCircle2, Loader2, X } from 'lucide-react';
+import { QrCode, CheckCircle2, Loader2, X, RefreshCw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface WhatsAppConnectionProps {
@@ -24,6 +24,7 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
   const [pairingCode, setPairingCode] = useState<string>('');
   const [qrCodeData, setQrCodeData] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const instanceName = tenantId || 'A5';
 
@@ -104,7 +105,7 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [instanceName]);
+  }, [instanceName, refreshKey]);
 
   return (
     <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 flex flex-col w-full max-w-sm mx-auto relative overflow-hidden">
@@ -151,6 +152,13 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
                 Código: <span className="text-zinc-200">{pairingCode}</span>
               </p>
             )}
+            <button 
+              onClick={() => setRefreshKey(prev => prev + 1)}
+              className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors mt-2 px-3 py-2 rounded-lg hover:bg-zinc-800/50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Atualizar QR Code
+            </button>
           </div>
         )}
 
@@ -171,6 +179,12 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
               <X className="w-8 h-8 text-red-500/80" />
             </div>
             <p className="text-sm text-red-400 font-medium">{errorMessage}</p>
+            <button 
+              onClick={() => setRefreshKey(prev => prev + 1)}
+              className="mt-4 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-sm font-medium transition-colors"
+            >
+              Tentar Novamente
+            </button>
           </div>
         )}
       </div>
