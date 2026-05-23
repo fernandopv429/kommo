@@ -94,7 +94,169 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// --- ROTAS DE CONFIGURAÇÃO DO SISTEMA --- //
+
+app.get('/api/settings/:key', async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    const setting = await prisma.systemSetting.findUnique({ where: { key } });
+    res.json({ value: setting?.value || '' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/settings', async (req: Request, res: Response) => {
+  try {
+    const { key, value } = req.body;
+    if (!key) {
+      res.status(400).json({ error: 'Key is required' });
+      return;
+    }
+    const setting = await prisma.systemSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value }
+    });
+    res.json(setting);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- ROTAS DO FLUXO OAUTH KOMMO --- //
+
+/**
+ * Helper: Busca Lead na Base (Cache) ou na API da Kommo
+ */
+async function fetchLeadData(tenantId: string, telefone_limpo: string, connection: any) {
+  const cachedLead = await prisma.kommoLeadCache.findUnique({
+    where: { tenantId_phoneNumber: { tenantId, phoneNumber: telefone_limpo } }
+  });
+
+  if (cachedLead) {
+    const rawCustomFields = cachedLead.customFields as any || {};
+    const contato = rawCustomFields._contatoObj || null;
+    const custom_fields = { ...rawCustomFields };
+    delete custom_fields._contatoObj;
+
+    return {
+      exists: true,
+      lead: {
+        id: cachedLead.leadId,
+        nome_card: cachedLead.name,
+        name: cachedLead.name,
+        price: cachedLead.price,
+        status_id: cachedLead.statusId,
+        pipeline_id: cachedLead.pipelineId,
+        tags: cachedLead.tags,
+        custom_fields,
+        contato: contato
+      }
+    };
+  }
+
+  const axiosConfig = {
+    headers: { 'Authorization': `Bearer ${connection.accessToken}` }
+  };
+
+  try {
+    const leadsRes = await axios.get(
+      `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads?query=${encodeURIComponent(telefone_limpo)}&with=contacts`,
+      axiosConfig
+    );
+    const leadsRaw = leadsRes.data?._embedded?.leads;
+
+    if (Array.isArray(leadsRaw) && leadsRaw.length > 0) {
+      const orderedLeads = leadsRaw.sort((a: any, b: any) => b.updated_at - a.updated_at);
+      const latestLead = orderedLeads[0];
+
+      const tagsRaw = latestLead._embedded?.tags || [];
+      const tags: string[] = tagsRaw.map((t: any) => t.name);
+
+      const cfRaw = latestLead.custom_fields_values || [];
+      const custom_fields: Record<string, string> = {};
+      cfRaw.forEach((cf: any) => {
+        if (cf.field_name && cf.values && cf.values.length > 0) {
+          custom_fields[cf.field_name] = cf.values[0].value;
+        }
+      });
+
+      let contatoObj = null;
+      const contactsRaw = latestLead._embedded?.contacts || [];
+      const mainContact = contactsRaw.find((c: any) => c.is_main === true) || contactsRaw[0];
+
+      if (mainContact) {
+        try {
+          const contactRes = await axios.get(
+            `https://${connection.kommoSubdomain}.kommo.com/api/v4/contacts/${mainContact.id}`,
+            axiosConfig
+          );
+          const rawContact = contactRes.data;
+
+          let phoneVal = '';
+          let emailVal = '';
+
+          const contactCFRaw = rawContact.custom_fields_values || [];
+          contactCFRaw.forEach((cf: any) => {
+            if (cf.field_code === 'PHONE' && cf.values && cf.values.length > 0) {
+              phoneVal = cf.values[0].value;
+            }
+            if (cf.field_code === 'EMAIL' && cf.values && cf.values.length > 0) {
+              emailVal = cf.values[0].value;
+            }
+          });
+
+          contatoObj = {
+            id: rawContact.id,
+            nome_real: rawContact.name,
+            telefone: phoneVal,
+            email: emailVal
+          };
+        } catch (contactErr: any) {
+          console.error('[Evolution] Erro ao buscar dados do contato:', contactErr.message);
+        }
+      }
+
+      await prisma.kommoLeadCache.create({
+        data: {
+          tenantId,
+          phoneNumber: telefone_limpo,
+          leadId: latestLead.id,
+          name: latestLead.name,
+          price: latestLead.price,
+          statusId: latestLead.status_id,
+          pipelineId: latestLead.pipeline_id,
+          tags,
+          customFields: { ...custom_fields, _contatoObj: contatoObj }
+        }
+      });
+
+      return {
+        exists: true,
+        lead: {
+          id: latestLead.id,
+          nome_card: latestLead.name,
+          name: latestLead.name,
+          price: latestLead.price,
+          status_id: latestLead.status_id,
+          pipeline_id: latestLead.pipeline_id,
+          tags,
+          custom_fields,
+          contato: contatoObj
+        }
+      };
+    } else {
+      return { exists: false, lead: null };
+    }
+  } catch (kommoErr: any) {
+    if (kommoErr.response && kommoErr.response.status === 204) {
+      return { exists: false, lead: null };
+    }
+    console.error('[Evolution] Erro ao buscar lead na Kommo:', kommoErr.response?.data || kommoErr.message);
+    return { exists: false, lead: null };
+  }
+}
 
 /**
  * Rota 1: Iniciar Conexão OAuth
@@ -320,6 +482,77 @@ app.get('/api/tenants/:tenant_id/accounts', async (req: Request, res: Response) 
   }
 });
 
+// 3.2 ROTA PARA CONSULTAR INFORMAÇÕES DA CONEXÃO PELA INSTÂNCIA (TENANT)
+app.get('/api/connections/info/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    
+    const connection = await prisma.kommoConnection.findFirst({
+      where: { tenantId: tenantId },
+      select: {
+        id: true,
+        tenantId: true,
+        accountName: true,
+        kommoSubdomain: true,
+        kommoAccountId: true,
+        isActive: true,
+        expiresAt: true,
+        updatedAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!connection) {
+      res.status(404).json({ exists: false, message: 'Nenhuma conexão ativa encontrada para este identificador (telefone).' });
+      return;
+    }
+
+    res.json({
+      exists: true,
+      data: connection
+    });
+
+  } catch (error: any) {
+    console.error('[API Connection Info] Erro:', error.message);
+    res.status(500).json({ error: 'Erro interno ao consultar informações da conexão.' });
+  }
+});
+
+// 3.3 CONSULTA DE LEAD NA KOMMO POR TELEFONE
+app.get('/api/leads/:tenantId/:phoneNumber', async (req: Request, res: Response) => {
+  try {
+    const { tenantId, phoneNumber } = req.params;
+    
+    const telefone_limpo = phoneNumber.replace(/\D/g, '');
+
+    const connection = await prisma.kommoConnection.findFirst({
+      where: { tenantId: tenantId, isActive: true }
+    });
+
+    if (!connection) {
+      res.status(404).json({ error: 'Conexão Kommo não encontrada ou inativa para este tenant.' });
+      return;
+    }
+
+    // Renova o token se necessário
+    const now = new Date();
+    const timeRemainingMs = connection.expiresAt.getTime() - now.getTime();
+    if (timeRemainingMs < 900000) {
+      await refreshKommoToken(connection.kommoAccountId);
+      const updatedConn = await prisma.kommoConnection.findUnique({ where: { kommoAccountId: connection.kommoAccountId } });
+      if (updatedConn) connection.accessToken = updatedConn.accessToken;
+    }
+
+    const { exists, lead } = await fetchLeadData(tenantId, telefone_limpo, connection);
+
+    res.json({ exists, lead });
+
+  } catch (error: any) {
+    console.error('[API Lead Query] Erro:', error.message);
+    res.status(500).json({ error: 'Erro interno ao consultar o Lead.' });
+  }
+});
+
 // Alternar status
 app.patch('/api/connections/:id/toggle', async (req: Request, res: Response) => {
   try {
@@ -389,10 +622,13 @@ app.post('/api/webhooks/kommo', async (req: Request, res: Response) => {
       if(updatedConn) connection.accessToken = updatedConn.accessToken;
     }
 
-    const n8nUrl = process.env.N8N_WEBHOOK_URL;
+    // Buscar a URL do webhook global no banco de dados, ou fallback para ENV
+    const webhookSetting = await prisma.systemSetting.findUnique({ where: { key: 'N8N_WEBHOOK_URL' } });
+    const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
+    
     if (!n8nUrl) {
-      console.error('[Webhook Kommo] Variavél N8N_WEBHOOK_URL não configurada no servidor.');
-      res.status(200).send('N8N_WEBHOOK_URL was missing.');
+      console.error('[Webhook Kommo] Webhook centralizador N8N não configurado.');
+      res.status(200).send('N8N webhook was missing.');
       return;
     }
 
@@ -463,89 +699,12 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
       if (updatedConn) connection.accessToken = updatedConn.accessToken;
     }
 
-    let lead_existe = false;
-    let finalLeadData = null;
-
-    const axiosConfig = {
-      headers: {
-        'Authorization': `Bearer ${connection.accessToken}`
-      }
-    };
-
-    try {
-      const leadsRes = await axios.get(`https://${connection.kommoSubdomain}.kommo.com/api/v4/leads?query=${encodeURIComponent(telefone_whatsapp)}&with=contacts`, axiosConfig);
-      
-      const leadsRaw = leadsRes.data?._embedded?.leads;
-
-      if (Array.isArray(leadsRaw) && leadsRaw.length > 0) {
-        lead_existe = true;
-
-        // 1. Filtrar o Lead mais recente
-        const orderedLeads = leadsRaw.sort((a: any, b: any) => b.updated_at - a.updated_at);
-        const latestLead = orderedLeads[0];
-
-        // 2. Extrair Dados do Card
-        const tagsRaw = latestLead._embedded?.tags || [];
-        const tags: string[] = tagsRaw.map((t: any) => t.name);
-
-        const cfRaw = latestLead.custom_fields_values || [];
-        const custom_fields: Record<string, string> = {};
-        cfRaw.forEach((cf: any) => {
-          if (cf.field_name && cf.values && cf.values.length > 0) {
-            custom_fields[cf.field_name] = cf.values[0].value;
-          }
-        });
-
-        // 3. Buscar os Dados do Contato Vinculado
-        let contatoObj = null;
-        const contactsRaw = latestLead._embedded?.contacts || [];
-        const mainContact = contactsRaw.find((c: any) => c.is_main === true) || contactsRaw[0];
-
-        if (mainContact) {
-          const contactRes = await axios.get(`https://${connection.kommoSubdomain}.kommo.com/api/v4/contacts/${mainContact.id}`, axiosConfig);
-          const rawContact = contactRes.data;
-
-          let phoneVal = '';
-          let emailVal = '';
-
-          const contactCFRaw = rawContact.custom_fields_values || [];
-          contactCFRaw.forEach((cf: any) => {
-            if (cf.field_code === 'PHONE' && cf.values && cf.values.length > 0) {
-              phoneVal = cf.values[0].value;
-            }
-            if (cf.field_code === 'EMAIL' && cf.values && cf.values.length > 0) {
-              emailVal = cf.values[0].value;
-            }
-          });
-
-          contatoObj = {
-            id: rawContact.id,
-            nome_real: rawContact.name,
-            telefone: phoneVal,
-            email: emailVal
-          };
-        }
-
-        finalLeadData = {
-          id: latestLead.id,
-          nome_card: latestLead.name,
-          status_id: latestLead.status_id,
-          pipeline_id: latestLead.pipeline_id,
-          tags,
-          custom_fields,
-          contato: contatoObj
-        };
-      }
-    } catch (kommoErr: any) {
-      if (kommoErr.response && kommoErr.response.status === 204) {
-        lead_existe = false;
-      } else {
-        console.error('[Evolution] Erro ao buscar lead na Kommo:', kommoErr.response?.data || kommoErr.message);
-      }
-    }
+    const { exists: lead_existe, lead: finalLeadData } = await fetchLeadData(tenantId, telefone_whatsapp, connection);
 
     // 4. Repasse completo para o n8n
-    const n8nUrl = process.env.N8N_WEBHOOK_URL;
+    const webhookSetting = await prisma.systemSetting.findUnique({ where: { key: 'N8N_WEBHOOK_URL' } });
+    const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
+    
     if (n8nUrl) {
       const payloadToN8n = {
         mensagem_whatsapp,
@@ -560,7 +719,7 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
       await axios.post(n8nUrl, payloadToN8n);
       console.log(`[Evolution Webhook] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
     } else {
-      console.warn('[Evolution] Variavél N8N_WEBHOOK_URL não configurada no servidor.');
+      console.warn('[Evolution] Webhook centralizador N8N não configurado no servidor (banco de dados ou .env).');
     }
 
     res.status(200).send('OK');

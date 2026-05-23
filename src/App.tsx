@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook } from 'lucide-react';
 import WhatsAppConnection from './components/WhatsAppConnection';
 
 interface Connection {
@@ -26,6 +26,32 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [selectedTenantForQR, setSelectedTenantForQR] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [savingWebhook, setSavingWebhook] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axios.get('/api/settings/N8N_WEBHOOK_URL');
+      if (res.data?.value) {
+        setWebhookUrl(res.data.value);
+      }
+    } catch (e: any) {
+      console.error('Erro ao buscar configuração do webhook:', e.message);
+    }
+  };
+
+  const saveWebhook = async () => {
+    setSavingWebhook(true);
+    try {
+      await axios.post('/api/settings', { key: 'N8N_WEBHOOK_URL', value: webhookUrl });
+      alert('Webhook centralizador salvo com sucesso!');
+    } catch (e: any) {
+      console.error('Erro ao salvar webhook:', e.message);
+      alert('Falha ao salvar webhook centralizador.');
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
 
   const fetchConnections = async () => {
     setLoading(true);
@@ -46,6 +72,7 @@ export default function App() {
 
   useEffect(() => {
     fetchConnections();
+    fetchSettings();
   }, []);
 
   const handleConnect = () => {
@@ -106,6 +133,30 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* Global Configuration Section */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="flex-1 w-full max-w-2xl">
+            <label className="block text-sm font-medium text-zinc-400 mb-1.5 flex items-center gap-1.5">
+              <Webhook className="w-4 h-4" /> N8N Webhook Centralizador URL
+            </label>
+            <input
+              type="text"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="https://sua-instancia-n8n.com/webhook/..."
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all font-mono text-sm"
+            />
+          </div>
+          <button
+            onClick={saveWebhook}
+            disabled={savingWebhook}
+            className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 shrink-0 md:mb-[1px]"
+          >
+            {savingWebhook ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Salvar Webhook
+          </button>
+        </div>
 
         {errorMessage && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start gap-3">
