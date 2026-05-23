@@ -85,9 +85,14 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
         // Successfully created, start polling
         startPolling();
       } catch (error: any) {
-        // If it already exists (usually 400 error or specific message), it's fine
+        // Handle variations of 'instance exists' in v2 (400, 403, or specific messages)
         const errorMsg = JSON.stringify(error.response?.data || '');
-        if (error.response?.status === 400 || errorMsg.includes('already exist')) {
+        if (
+          error.response?.status === 400 || 
+          error.response?.status === 403 || 
+          errorMsg.toLowerCase().includes('already exist') ||
+          errorMsg.toLowerCase().includes('já existe')
+        ) {
           console.log('[Evolution] Instance already exists, proceeding to connect...', errorMsg);
           startPolling();
         } else {
@@ -98,8 +103,20 @@ export default function WhatsAppConnection({ tenantId, onClose }: WhatsAppConnec
       }
     };
 
+    const checkExistingAndInitialize = async () => {
+      setStatus('LOADING');
+      try {
+        // Try connecting first. If it succeeds, it exists.
+        await evolutionApi.get(`/instance/connect/${instanceName}`);
+        startPolling();
+      } catch (error: any) {
+        // If it throws 404 (or other errors), we try to create it.
+        initializeInstance();
+      }
+    };
+
     if (instanceName) {
-      initializeInstance();
+      checkExistingAndInitialize();
     }
 
     return () => {
