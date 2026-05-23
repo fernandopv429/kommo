@@ -138,13 +138,13 @@ export default function App() {
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="flex-1 w-full max-w-2xl">
             <label className="block text-sm font-medium text-zinc-400 mb-1.5 flex items-center gap-1.5">
-              <Webhook className="w-4 h-4" /> N8N Webhook Centralizador URL
+              <Webhook className="w-4 h-4" /> Webhook Centralizador URL
             </label>
             <input
               type="text"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://sua-instancia-n8n.com/webhook/..."
+              placeholder="https://seu-sistema.com/webhook/..."
               className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all font-mono text-sm"
             />
           </div>
