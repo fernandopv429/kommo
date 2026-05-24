@@ -391,7 +391,10 @@ Se não encontrar a informação, retorne null no respectivo campo.`;
     if (hasStatusChange || hasFields) {
       console.log(`[Gemini Routing] Updating Lead ${leadData.id}. Status change: ${hasStatusChange}, Fields: ${fieldsToUpdate.length}`);
       
-      const patchData: any = { id: Number(leadData.id) };
+      const patchData: any = { 
+        id: Number(leadData.id),
+        pipeline_id: Number(leadData.pipeline_id)
+      };
       if (leadData.name) patchData.name = leadData.name;
       if (hasStatusChange) patchData.status_id = Number(parsed.novoStatusId);
       if (hasFields) patchData.custom_fields_values = fieldsToUpdate;
@@ -418,7 +421,7 @@ Se não encontrar a informação, retorne null no respectivo campo.`;
           console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
         }
       }
-      return parsed.novoStatusId;
+      return parsed;
     }
   } catch (error: any) {
     console.error('[Gemini Routing] Erro ao processar:', error.response?.data || error.message);
@@ -871,10 +874,11 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
     const { exists: lead_existe, lead: finalLeadData } = await fetchLeadData(tenantId, telefone_whatsapp, connection);
 
     // 4. Analisa a mensagem com Gemini para mover de etapa (opcional/baseado na intenção)
+    let ai_parsed: any = {};
     if (lead_existe && finalLeadData) {
-      const newStatusId = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData);
-      if (newStatusId) {
-        finalLeadData.status_id = newStatusId;
+      ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
+      if (ai_parsed.novoStatusId) {
+        finalLeadData.status_id = ai_parsed.novoStatusId;
       }
     }
 
@@ -890,7 +894,16 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
         lead: finalLeadData,
         access_token: connection.accessToken,
         subdomain: connection.kommoSubdomain,
-        tenantId: connection.tenantId
+        tenantId: connection.tenantId,
+
+        // Variáveis mapeadas diretamente para facilitar o uso no n8n ($json.Lead_id, etc)
+        Lead_id: finalLeadData ? finalLeadData.id : null,
+        NOme: finalLeadData ? finalLeadData.name : "",
+        Status_id: ai_parsed.novoStatusId > 0 ? ai_parsed.novoStatusId : (finalLeadData ? finalLeadData.status_id : null),
+        Profissional: ai_parsed.profissional || "",
+        Pais: ai_parsed.pais || "",
+        "Tipo de tatoo": ai_parsed.tipoDeTatoo || "",
+        has_update: Object.keys(ai_parsed).length > 0
       };
 
       await axios.post(n8nUrl, payloadToN8n);
