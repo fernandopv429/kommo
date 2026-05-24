@@ -324,23 +324,31 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
       return null;
     }
     
+    const pipelineId = leadData.pipeline_id;
+    if (!pipelineId) {
+      console.warn('[Gemini Routing] Pipeline ID missing in leadData:', leadData);
+      return null;
+    }
+    
     // Buscar etapas do pipeline
     const axiosConfig = {
       headers: { 'Authorization': `Bearer ${connection.accessToken}` }
     };
     
+    console.log(`[Gemini Routing] Fetching statuses for pipeline ID: ${pipelineId}`);
     const pipeRes = await axios.get(
-      `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/pipelines/${leadData.pipeline_id}`,
+      `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/pipelines/${pipelineId}`,
       axiosConfig
     );
     
     const statusesRaw = pipeRes.data?._embedded?.statuses || [];
+    console.log(`[Gemini Routing] Pipeline fetched. Statuses count: ${statusesRaw.length}`);
     const statuses = statusesRaw
-      .filter((s: any) => s.id >= 10000000)
+      .filter((s: any) => s.id !== 142 && s.id !== 143) // Ignore Won and Lost by default, unless they specifically ask, but usually we just keep all active pipeline statuses. Actually let's keep them all just in case.
       .map((s: any) => ({
         id: s.id,
         name: s.name,
-        description: s.description || "" // muitas vezes a dica fica na description, ou o proprio nome serve de dica
+        description: s.description || "" 
       }));
 
     // Buscar campos personalizados
@@ -413,6 +421,7 @@ Sua tarefa:
     
     const rawText = response.text || "{}";
     const parsed = JSON.parse(rawText.trim());
+    console.log('[Gemini Routing] IA Response Parsed:', JSON.stringify(parsed));
     
     const fieldsToUpdate: any[] = [];
     if (parsed.custom_fields && Array.isArray(parsed.custom_fields)) {
