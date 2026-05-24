@@ -335,11 +335,13 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
     );
     
     const statusesRaw = pipeRes.data?._embedded?.statuses || [];
-    const statuses = statusesRaw.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description || "" // muitas vezes a dica fica na description, ou o proprio nome serve de dica
-    }));
+    const statuses = statusesRaw
+      .filter((s: any) => s.id >= 10000000)
+      .map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description || "" // muitas vezes a dica fica na description, ou o proprio nome serve de dica
+      }));
 
     // Buscar campos personalizados
     let customFieldsContext = "";
