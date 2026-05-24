@@ -386,24 +386,27 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
     const etapaAtualObj = statuses.find((s: any) => Number(s.id) === Number(leadData.status_id));
     const nomeEtapaAtual = etapaAtualObj ? etapaAtualObj.name : "Desconhecida";
 
+    console.log(`[AI Routing] Mapeamento de Status disponíveis para este Pipeline:`);
+    console.log(JSON.stringify(statuses, null, 2));
+
     const prompt = `Você é um analista de CRM inteligente e perspicaz, responsável por mover leads pelas etapas do funil de vendas (pipeline) baseado estritamente na intenção da última mensagem comercial enviada pelo cliente.
 
 === CONTEXTO ATUAL DO LEAD ===
 - Última Mensagem do Lead: "${mensagem_whatsapp}"
 - Etapa Onde o Lead Está Agora: ID ${leadData.status_id} (Nome da Etapa: "${nomeEtapaAtual}")
 
-=== ETAPAS DISPONÍVEIS NO FUNIL ===
+=== ETAPAS DISPONÍVEIS NO FUNIL (A DECISÃO DEVE SER UM DESTES IDs) ===
 Analise os NOMES e as DESCRIÇÕES abaixo para identificar para onde o lead deve avançar:
 ${JSON.stringify(statuses, null, 2)}
 
 ${customFieldsContext}
 
 === REGRAS DE TRANSIÇÃO CRÍTICAS ===
-1. Compare a intenção da "Última Mensagem do Lead" com as Etapas Disponíveis.
-2. Se a mensagem do cliente indicar de forma clara e forte uma ação correspondente ao NOME ou objetivo de uma etapa futura, você DEVE retornar o ID dessa nova etapa no campo "novoStatusId".
-   - Se o cliente diz "Gostaria de realizar um agendamento" ou algo similar, e existe uma etapa chamada "Agendamento" ou "Visita", mude para o ID dessa etapa.
-   - Se o cliente diz "Ok, damos fechar o projeto", "Quero fechar" ou "Onde assino?", e existe uma etapa chamada "Fechamento", "Contrato" ou "Ganho", mude para o ID dessa etapa.
-3. Se a mensagem for apenas um agradecimento ("Obrigado"), uma saudação ("Olá", "Tudo bem?") ou uma dúvida genérica que não altera o momento comercial do lead, ele DEVE PERMANECER na etapa atual. Nesse caso, retorne exatamente o ID atual: ${leadData.status_id}.
+1. Compare a intenção da "Última Mensagem do Lead" com as Etapas Disponíveis, avaliando o significado e propósito de cada etapa.
+2. Se a mensagem do cliente indicar forte intenção de avançar no funil para uma das próximas etapas mapeadas, você OBRIGATORIAMENTE deve retornar o ID dessa nova etapa no campo "novoStatusId".
+   - A decisão deve ser baseada nas etapas reais do pipeline informadas acima. Não "invente" status que não estão na lista.
+   - Encontre a etapa que casa perfeitamente com a intenção da mensagem. Exemplo genérico: Se a intenção é marcar um compromisso, e existir uma etapa cujo objetivo seja agendamento/reunião, mude para ela. Se a intenção for envio de proposta e houver etapa de proposta, mude para ela.
+3. Se a mensagem for apenas um agradecimento ("Obrigado"), uma saudação ("Olá", "Tudo bem?"), uma dúvida isolada ou algo que NÃO indique avanço real no processo de vendas, ele DEVE PERMANECER na etapa atual. Nesse caso, retorne exatamente o ID atual: ${leadData.status_id}.
 
 === PREENCHIMENTO DE CAMPOS PERSONALIZADOS ===
 Sua tarefa também inclui identificar se a mensagem traz informações para preencher campos personalizados:
@@ -411,11 +414,11 @@ Sua tarefa também inclui identificar se a mensagem traz informações para pree
 - Se não houver dados, retorne uma array vazia [].
 
 === EXEMPLOS DE COMPORTAMENTO ===
-- Mensagem: "Quero agendar uma reunião" -> Se houver a etapa "Agendamento" (ID 12345), Saída: {"novoStatusId": 12345, "custom_fields": []}
+- Se a mensagem indica claramente que o usuário realizou a ação esperada para avançar para a etapa X -> Saída: {"novoStatusId": <ID_DA_ETAPA_X>, "custom_fields": []}
 - Mensagem: "Beleza, valeu!" -> Saída (MANTÉM): {"novoStatusId": ${leadData.status_id}, "custom_fields": []}
 - Mensagem: "Meu email é ola@teste.com" -> Saída (MANTÉM STATUS, ATUALIZA CAMPO): {"novoStatusId": ${leadData.status_id}, "custom_fields": [{"field_id": 999123, "field_name": "Email", "value": "ola@teste.com"}]}
 
-Retorne exclusivamente o JSON preenchido.`;
+Retorne exclusivamente o JSON preenchido. O "novoStatusId" DEVE ser um número inteiro correspondente ao ID de uma das etapas válidas, caso contrário o sistema falhará.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
