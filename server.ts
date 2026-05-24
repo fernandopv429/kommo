@@ -363,20 +363,26 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
     
     const ai = new GoogleGenAI({ apiKey });
     
-    const prompt = `Você é um analista de CRM inteligente. Analise a seguinte mensagem recebida de um Lead (usuário/cliente):
+    const prompt = `Você é um analista de CRM inteligente responsável por mover leads pelas etapas do funil de vendas (pipeline), e atualizar os dados do lead baseado no que ele falar.
+
+Analise a seguinte mensagem recente do Lead (usuário/cliente):
 Mensagem do Lead: "${mensagem_whatsapp}"
 
 O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
 
-Aqui estão as etapas (statuses) disponíveis no funil (pipeline) atual do lead:
+Aqui estão as etapas (statuses) disponíveis no funil atual do lead, em ordem, junto com as descrições de quando um lead deve estar nelas:
 ${JSON.stringify(statuses, null, 2)}
+
 ${customFieldsContext}
 
 Sua tarefa:
-1. Avaliar se o Lead DEVE ser movido para outa etapa. Se sim, retorne o numero do ID da nova etapa. Se não, retorne -1.
-2. Identificar se a mensagem traz informações ("intent") para preencher algum dos campos personalizados disponíveis. 
-   Extraia os dados relevantes e relacione-os usando "field_id" e "field_name", além do "value".
-   Retorne no array 'custom_fields' apenas se achar informacoes correspondentes aos campos.
+1. Avalie se o Lead fez algo que corresponda ao avanço para uma NOVA ETAPA do funil, baseado nas descrições de cada etapa e na mensagem enviada.
+   - Se o lead deve avançar ou mudar de etapa, retorne o numero do "ID" exato da nova etapa correspondente (novoStatusId).
+   - Se o lead deve PERMANECER na etapa atual (a mensagem não justifica avanço nem retrocesso), retorne exatamente o ID da etapa atual (${leadData.status_id}).
+2. Identifique se a mensagem traz informações ("intent") para preencher algum dos campos personalizados disponíveis.
+   - Extraia os dados relevantes e relacione-os usando "field_id" e "field_name", além do "value".
+   - Retorne no array 'custom_fields' apenas se achar informacoes correspondentes aos campos.
+   - Se nenhum campo foi identificado, retorne um array vazio [].
 `;
 
     const response = await ai.models.generateContent({
@@ -453,8 +459,9 @@ Sua tarefa:
           console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
         }
       }
-      return parsed;
     }
+    
+    return parsed;
   } catch (error: any) {
     console.error('[Gemini Routing] Erro ao processar:', error.response?.data || error.message);
   }
@@ -911,11 +918,19 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
     let action_taken: string | null = null;
 
     if (lead_existe && finalLeadData) {
+      const oldStatusId = finalLeadData.status_id;
       ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
-      if (ai_parsed.novoStatusId) {
-        finalLeadData.status_id = ai_parsed.novoStatusId;
-        action_taken = `Moveu para etapa ${ai_parsed.novoStatusId}`;
+      
+      const novoStatusNum = Number(ai_parsed.novoStatusId);
+      const isStatusChanged = !isNaN(novoStatusNum) && novoStatusNum > 0 && novoStatusNum !== Number(oldStatusId);
+
+      if (isStatusChanged) {
+        finalLeadData.status_id = novoStatusNum;
+        action_taken = `Moveu para etapa ${novoStatusNum}`;
+      } else {
+        action_taken = "Manteve na etapa atual";
       }
+
       if (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0) {
         action_taken = action_taken ? `${action_taken} | Atualizou campos` : "Atualizou campos";
       }

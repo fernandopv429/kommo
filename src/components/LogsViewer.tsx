@@ -40,6 +40,18 @@ export default function LogsViewer({ tenantId, onClose }: LogsViewerProps) {
 
   useEffect(() => {
     fetchLogs();
+
+    const interval = setInterval(() => {
+      axios.get(`/api/tenants/${tenantId}/logs`)
+        .then(res => {
+          setLogs(res.data);
+        })
+        .catch(e => {
+          console.warn("Error polling logs:", e.message);
+        });
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [tenantId]);
 
   return (
