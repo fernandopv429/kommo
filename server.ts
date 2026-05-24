@@ -375,6 +375,11 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
       console.warn('[Gemini Routing] Falha ao buscar custom fields', err.message);
     }
     
+    console.log(`\n======================================================`);
+    console.log(`[AI Routing] INICIANDO ANÁLISE DE ROTEAMENTO (LEAD ID: ${leadData.id})`);
+    console.log(`[AI Routing] Mensagem recebida: "${mensagem_whatsapp}"`);
+    console.log(`======================================================`);
+
     const openai = new OpenAI({ apiKey });
     
     // 1. Encontrar o nome amigável da etapa atual para dar contexto real à IA
@@ -446,8 +451,10 @@ Retorne exclusivamente o JSON preenchido.`;
     });
     
     const rawText = response.choices[0].message.content || "{}";
+    console.log('[AI Routing] Resposta bruta da IA recebida:', rawText);
+
     const parsed = JSON.parse(rawText.trim());
-    console.log('[AI Routing] IA Response Parsed:', JSON.stringify(parsed));
+    console.log('[AI Routing] JSON processado pela IA:', JSON.stringify(parsed, null, 2));
     
     const fieldsToUpdate: any[] = [];
     if (parsed.custom_fields && Array.isArray(parsed.custom_fields)) {
@@ -463,7 +470,14 @@ Retorne exclusivamente o JSON preenchido.`;
     const hasFields = fieldsToUpdate.length > 0;
 
     if (hasStatusChange || hasFields) {
-      console.log(`[Gemini Routing] Atualizando Lead ${leadData.id}. Mudança de status: ${hasStatusChange}, Campos: ${fieldsToUpdate.length}`);
+      console.log(`[AI Routing] PREPARANDO ATUALIZAÇÃO PARA O LEAD ID: ${leadData.id}`);
+      if (hasStatusChange) {
+        console.log(`[AI Routing] -> STATUS: Lead será movido do ID ${leadData.status_id} para ${parsed.novoStatusId}`);
+      }
+      if (hasFields) {
+        console.log(`[AI Routing] -> CAMPOS: ${fieldsToUpdate.length} campo(s) será(ão) atualizado(s)`);
+        console.log(`[AI Routing] -> DETALHE DOS CAMPOS: ${JSON.stringify(fieldsToUpdate)}`);
+      }
       
       // CORREÇÃO: A Kommo precisa apenas do ID do lead na raiz para identificar o registro
       const patchData: any = { 
@@ -480,20 +494,29 @@ Retorne exclusivamente o JSON preenchido.`;
       }
 
       try {
+        console.log(`[AI Routing] Enviando PATCH para a API da Kommo (URL: https://${connection.kommoSubdomain}.kommo.com/api/v4/leads)`);
+        console.log(`[AI Routing] Payload da requisição: ${JSON.stringify([patchData])}`);
+
         // A Kommo espera uma Array de objetos no PATCH de leads
         const patchRes = await axios.patch(
           `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
           [ patchData ],
           axiosConfig
         );
-        console.log(`[AI Routing] Atualização realizada com sucesso na Kommo.`);
+        console.log(`[AI Routing] SUCESSO: Atualização confirmada na Kommo (HTTP ${patchRes.status}).`);
       } catch (e: any) {
         const errorData = e.response?.data;
-        const isLeadNotFound = e.response?.status === 400 && 
+        const statusCode = e.response?.status;
+        
+        console.error(`[AI Routing] ERRO FATAL ao atualizar na Kommo (HTTP ${statusCode}).`);
+        console.error(`[AI Routing] Detalhes do erro da API da Kommo: `, JSON.stringify(errorData || e.message, null, 2));
+
+        const isLeadNotFound = statusCode === 400 && 
           (JSON.stringify(errorData).includes('Lead not found') || JSON.stringify(errorData).includes('not_found'));
 
         if (isLeadNotFound) {
-          console.warn(`[AI Routing] Lead ID ${leadData.id} não existe mais na Kommo (provavelmente foi excluído). Limpando cache para o telefone ${leadData.telefone || leadData.phoneNumber}...`);
+          console.warn(`[AI Routing] ALERTA: O Lead ID ${leadData.id} não existe mais na Kommo (foi excluído no CRM).`);
+          console.warn(`[AI Routing] Iniciando limpeza de cache...`);
           
           try {
             await prisma.kommoLeadCache.deleteMany({
@@ -502,12 +525,10 @@ Retorne exclusivamente o JSON preenchido.`;
                 leadId: Number(leadData.id)
               }
             });
-            console.log(`[AI Routing] Cache obsoleto removido com sucesso. Na próxima mensagem o sistema buscará o ID novo.`);
+            console.log(`[AI Routing] Cache obsoleto limpo. O próximo contato recriará o lead.`);
           } catch (cacheErr: any) {
-            console.error('[AI Routing] Erro ao deletar cache obsoleto:', cacheErr.message);
+            console.error('[AI Routing] Erro ao tentar limpar o banco de dados de cache:', cacheErr.message);
           }
-        } else {
-          console.error(`[AI Routing] Falha na atualização na Kommo: `, errorData || e.message);
         }
       }
 
