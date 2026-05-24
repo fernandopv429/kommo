@@ -416,7 +416,8 @@ Sua tarefa:
       });
     }
 
-    const hasStatusChange = parsed.novoStatusId && parsed.novoStatusId > 0 && parsed.novoStatusId !== leadData.status_id;
+    const novoStatus = Number(parsed.novoStatusId);
+    const hasStatusChange = !isNaN(novoStatus) && novoStatus > 0 && novoStatus !== Number(leadData.status_id);
     const hasFields = fieldsToUpdate.length > 0;
 
     if (hasStatusChange || hasFields) {
@@ -906,11 +907,38 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
 
     // 4. Analisa a mensagem com Gemini para mover de etapa (opcional/baseado na intenção)
     let ai_parsed: any = {};
+    let ai_text_response: string | null = null;
+    let action_taken: string | null = null;
+
     if (lead_existe && finalLeadData) {
       ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
       if (ai_parsed.novoStatusId) {
         finalLeadData.status_id = ai_parsed.novoStatusId;
+        action_taken = `Moveu para etapa ${ai_parsed.novoStatusId}`;
       }
+      if (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0) {
+        action_taken = action_taken ? `${action_taken} | Atualizou campos` : "Atualizou campos";
+      }
+      ai_text_response = JSON.stringify(ai_parsed);
+    } else {
+      action_taken = "Ignorado (Lead inexistente)";
+    }
+
+    // Criar o log da interação
+    try {
+      await prisma.interactionLog.create({
+        data: {
+          tenantId: tenantId,
+          leadId: finalLeadData ? String(finalLeadData.id) : null,
+          whatsappNumber: telefone_whatsapp,
+          incomingMessage: mensagem_whatsapp,
+          aiResponse: ai_text_response,
+          actionTaken: action_taken,
+          status: 'SUCCESS'
+        }
+      });
+    } catch (e: any) {
+      console.warn('[Evolution Webhook] Falha ao salvar InteractionLog:', e.message);
     }
 
     // 5. Repasse completo para o n8n
@@ -930,8 +958,8 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
         // Variáveis mapeadas diretamente para facilitar o uso no n8n ($json.Lead_id, etc)
         Lead_id: finalLeadData ? finalLeadData.id : null,
         Nome: finalLeadData ? finalLeadData.name : "",
-        Status_id: ai_parsed.novoStatusId > 0 ? ai_parsed.novoStatusId : (finalLeadData ? finalLeadData.status_id : null),
-        has_update: (ai_parsed.novoStatusId > 0 && ai_parsed.novoStatusId !== (finalLeadData ? finalLeadData.status_id : null)) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
+        Status_id: (ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0) ? Number(ai_parsed.novoStatusId) : (finalLeadData ? finalLeadData.status_id : null),
+        has_update: ((ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0 && Number(ai_parsed.novoStatusId) !== Number(finalLeadData ? finalLeadData.status_id : null))) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
         campos_personalizados_atualizados_ia: ai_parsed.custom_fields || []
       };
 
