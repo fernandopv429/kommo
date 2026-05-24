@@ -16,6 +16,9 @@ export async function refreshKommoToken(kommoAccountId: string): Promise<void> {
     if (!redirect_uri && process.env.APP_URL) {
       redirect_uri = `${process.env.APP_URL.trim()}/auth/kommo/callback`;
     }
+    if (!redirect_uri) {
+      redirect_uri = 'https://tarif.nexusdevhub.com/auth/kommo/callback';
+    }
 
     if (!client_id || !client_secret || !redirect_uri) {
       throw new Error('Faltam credenciais do Kommo Hub (.env ou painel do Coolify)');

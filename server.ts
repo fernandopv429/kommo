@@ -26,7 +26,7 @@ async function createEvolutionInstance(tenantId: string) {
       const finalUrl = 'https://tarif.nexusdevhub.com';
 
       await axios.post(
-        `${EVOLUTION_URL_EXEC}/webhook/instance/${tenantId}`,
+        `${EVOLUTION_URL_EXEC}/webhook/set/${tenantId}`,
         {
           enabled: true,
           url: `${finalUrl}/api/webhooks/evolution/${tenantId}`,
@@ -412,7 +412,7 @@ Se o lead NÃO precisar ser movido, ou não houver clareza suficiente, retorne -
 app.get('/auth/kommo/connect', (req: Request, res: Response) => {
   try {
     const client_id = process.env.KOMMO_CLIENT_ID;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : undefined);
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : 'https://tarif.nexusdevhub.com/auth/kommo/callback');
 
     const empresa_id = req.query.empresa_id || req.query.tenantId;
 
@@ -455,7 +455,7 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
 
     const client_id = process.env.KOMMO_CLIENT_ID;
     const client_secret = process.env.KOMMO_CLIENT_SECRET;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : undefined);
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : 'https://tarif.nexusdevhub.com/auth/kommo/callback');
 
     const tenantId = state;
 
@@ -575,6 +575,7 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
           <h2>Erro na Integração</h2>
           <p>Não foi possível concluir a integração com Kommo.</p>
           <p>Detalhes: ${err?.response?.data?.title || err.message}</p>
+          <p style="font-size: 12px; color: #555;">Dados extras: ${JSON.stringify(err?.response?.data || {})}</p>
         </body>
       </html>
     `);
@@ -1020,7 +1021,7 @@ app.post('/api/tenants/:tenant_id/sync-webhook', async (req: Request, res: Respo
     const finalUrl = 'https://tarif.nexusdevhub.com';
 
     await axios.post(
-      `${EVOLUTION_URL_EXEC}/webhook/instance/${tenant_id}`,
+      `${EVOLUTION_URL_EXEC}/webhook/set/${tenant_id}`,
       {
         enabled: true,
         url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
