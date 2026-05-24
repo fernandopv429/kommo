@@ -28,13 +28,15 @@ async function createEvolutionInstance(tenantId: string) {
       await axios.post(
         `${EVOLUTION_URL_EXEC}/webhook/set/${tenantId}`,
         {
-          enabled: true,
-          url: `${finalUrl}/api/webhooks/evolution/${tenantId}`,
-          webhookByEvents: true,
-          webhookBase64: false,
-          events: [
-            "MESSAGES_UPSERT"
-          ]
+          webhook: {
+            enabled: true,
+            url: `${finalUrl}/api/webhooks/evolution/${tenantId}`,
+            webhookByEvents: true,
+            webhookBase64: false,
+            events: [
+              "MESSAGES_UPSERT"
+            ]
+          }
         },
         {
           headers: {
@@ -1023,11 +1025,13 @@ app.post('/api/tenants/:tenant_id/sync-webhook', async (req: Request, res: Respo
     await axios.post(
       `${EVOLUTION_URL_EXEC}/webhook/set/${tenant_id}`,
       {
-        enabled: true,
-        url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
-        webhookByEvents: true,
-        webhookBase64: false,
-        events: ["MESSAGES_UPSERT"]
+        webhook: {
+          enabled: true,
+          url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
+          webhookByEvents: true,
+          webhookBase64: false,
+          events: ["MESSAGES_UPSERT"]
+        }
       },
       {
         headers: {
