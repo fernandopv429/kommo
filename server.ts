@@ -348,12 +348,17 @@ Mensagem do Lead: "${mensagem_whatsapp}"
 
 O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
 
-Aqui estão as etapas (statuses) disponíveis no funil (pipeline) atual do lead, incluindo ID e Nome/Dica de cada uma:
+Aqui estão as etapas (statuses) disponíveis no funil (pipeline) atual do lead:
 ${JSON.stringify(statuses, null, 2)}
 
-Sua tarefa: Avaliar se, com base estritamente na intenção descrita na Mensagem do Lead e nos Nomes/Dicas (contexto) das etapas disponíveis, o Lead DEVE ser movido para outa etapa.
-Pense de forma objetiva. Se a resposta justificar a mudança de etapa, retorne o numero correspondente ao id da nova etapa.
-Se o lead NÃO precisar ser movido, ou não houver clareza suficiente, retorne -1.`;
+Sua tarefa:
+1. Avaliar se o Lead DEVE ser movido para outa etapa. Se sim, retorne o numero do ID da nova etapa. Se não, retorne -1.
+2. Extrair informações para atualizar os campos personalizados do lead, caso a mensagem mencione:
+   - Profissional (nome do profissional se aplicável)
+   - Pais (país de origem/moradia)
+   - Tipo de tatoo (pequena, grande, realista, etc)
+
+Se não encontrar a informação, retorne null no respectivo campo.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",
@@ -363,10 +368,10 @@ Se o lead NÃO precisar ser movido, ou não houver clareza suficiente, retorne -
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            novoStatusId: {
-              type: Type.NUMBER,
-              description: "O ID numérico da etapa se o lead deve ser movido, ou -1 caso não precise alterar."
-            }
+            novoStatusId: { type: Type.NUMBER },
+            profissional: { type: Type.STRING, nullable: true },
+            pais: { type: Type.STRING, nullable: true },
+            tipoDeTatoo: { type: Type.STRING, nullable: true }
           }
         }
       }
@@ -375,30 +380,44 @@ Se o lead NÃO precisar ser movido, ou não houver clareza suficiente, retorne -
     const rawText = response.text || "{}";
     const parsed = JSON.parse(rawText.trim());
     
-    if (parsed.novoStatusId && parsed.novoStatusId > 0 && parsed.novoStatusId !== leadData.status_id) {
-      console.log(`[Gemini Routing] Moving lead ${leadData.id} to status ${parsed.novoStatusId} (was ${leadData.status_id})`);
-      
-      const patchRes = await axios.patch(
-        `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
-        [
-          {
-            id: leadData.id,
-            status_id: parsed.novoStatusId
-          }
-        ],
-        axiosConfig
-      );
+    const fieldsToUpdate: any[] = [];
+    if (parsed.profissional) fieldsToUpdate.push({ field_id: 2857590, values: [{ value: parsed.profissional }] });
+    if (parsed.pais) fieldsToUpdate.push({ field_id: 3021266, values: [{ value: parsed.pais }] });
+    if (parsed.tipoDeTatoo) fieldsToUpdate.push({ field_id: 3021298, values: [{ value: parsed.tipoDeTatoo }] });
 
-      // Update cache so subsequent messages know the new status
-      try {
-        await prisma.kommoLeadCache.updateMany({
-          where: { leadId: leadData.id, tenantId: connection.tenantId },
-          data: { statusId: parsed.novoStatusId }
-        });
-      } catch (err: any) {
-        console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
-      }
+    const hasStatusChange = parsed.novoStatusId && parsed.novoStatusId > 0 && parsed.novoStatusId !== leadData.status_id;
+    const hasFields = fieldsToUpdate.length > 0;
+
+    if (hasStatusChange || hasFields) {
+      console.log(`[Gemini Routing] Updating Lead ${leadData.id}. Status change: ${hasStatusChange}, Fields: ${fieldsToUpdate.length}`);
       
+      const patchData: any = { id: Number(leadData.id) };
+      if (leadData.name) patchData.name = leadData.name;
+      if (hasStatusChange) patchData.status_id = Number(parsed.novoStatusId);
+      if (hasFields) patchData.custom_fields_values = fieldsToUpdate;
+
+      try {
+        const patchRes = await axios.patch(
+          `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
+          [ patchData ],
+          axiosConfig
+        );
+        console.log(`[Gemini Routing] Update successful.`);
+      } catch(e: any) {
+        console.error(`[Gemini Routing] Update failed: `, e.response?.data || e.message);
+      }
+
+      if (hasStatusChange) {
+        // Update cache so subsequent messages know the new status
+        try {
+          await prisma.kommoLeadCache.updateMany({
+            where: { leadId: leadData.id, tenantId: connection.tenantId },
+            data: { statusId: parsed.novoStatusId }
+          });
+        } catch (err: any) {
+          console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
+        }
+      }
       return parsed.novoStatusId;
     }
   } catch (error: any) {
