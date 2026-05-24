@@ -494,16 +494,16 @@ Retorne exclusivamente o JSON preenchido.`;
       }
 
       try {
-        console.log(`[AI Routing] Enviando PATCH para a API da Kommo (URL: https://${connection.kommoSubdomain}.kommo.com/api/v4/leads)`);
-        console.log(`[AI Routing] Payload da requisição: ${JSON.stringify([patchData])}`);
+        console.log(`[AI Routing] Enviando PATCH para a API da Kommo (URL:  https://${connection.kommoSubdomain}.kommo.com/api/v4/leads)`);
+        console.log(`[AI Routing] Payload da requisição: ${JSON.stringify([patchData], null, 2)}`);
 
-        // A Kommo espera uma Array de objetos no PATCH de leads
         const patchRes = await axios.patch(
           `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
           [ patchData ],
           axiosConfig
         );
         console.log(`[AI Routing] SUCESSO: Atualização confirmada na Kommo (HTTP ${patchRes.status}).`);
+        console.log(`[AI Routing] Resposta da API da Kommo: `, JSON.stringify(patchRes.data, null, 2));
       } catch (e: any) {
         const errorData = e.response?.data;
         const statusCode = e.response?.status;
