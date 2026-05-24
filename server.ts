@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { createServer as createViteServer } from 'vite';
 import cron from 'node-cron';
 import { refreshKommoToken, ensureValidKommoToken, registerKommoWebhook } from './src/lib/kommo-auth';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 const EVOLUTION_URL = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
@@ -310,6 +311,98 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
     console.error('[Evolution] Erro ao buscar lead na Kommo:', kommoErr.response?.data || kommoErr.message);
     return { exists: false, lead: null };
   }
+}
+
+async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, leadData: any) {
+  try {
+    if (!leadData || !leadData.pipeline_id || !leadData.status_id) return null;
+    const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAH3nGvrUfV2SFvCVhABOJ5qLdVX-KbdEI";
+    if (!apiKey) {
+      console.warn('[Gemini Routing] GEMINI_API_KEY não configurada. Pulando análise IA.');
+      return null;
+    }
+    
+    // Buscar etapas do pipeline
+    const axiosConfig = {
+      headers: { 'Authorization': `Bearer ${connection.accessToken}` }
+    };
+    
+    const pipeRes = await axios.get(
+      `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/pipelines/${leadData.pipeline_id}`,
+      axiosConfig
+    );
+    
+    const statusesRaw = pipeRes.data?._embedded?.statuses || [];
+    const statuses = statusesRaw.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description || "" // muitas vezes a dica fica na description, ou o proprio nome serve de dica
+    }));
+    
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const prompt = `Você é um analista de CRM inteligente. Analise a seguinte mensagem recebida de um Lead (usuário/cliente):
+Mensagem do Lead: "${mensagem_whatsapp}"
+
+O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
+
+Aqui estão as etapas (statuses) disponíveis no funil (pipeline) atual do lead, incluindo ID e Nome/Dica de cada uma:
+${JSON.stringify(statuses, null, 2)}
+
+Sua tarefa: Avaliar se, com base estritamente na intenção descrita na Mensagem do Lead e nos Nomes/Dicas (contexto) das etapas disponíveis, o Lead DEVE ser movido para outa etapa.
+Pense de forma objetiva. Se a resposta justificar a mudança de etapa, retorne o numero correspondente ao id da nova etapa.
+Se o lead NÃO precisar ser movido, ou não houver clareza suficiente, retorne -1.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            novoStatusId: {
+              type: Type.NUMBER,
+              description: "O ID numérico da etapa se o lead deve ser movido, ou -1 caso não precise alterar."
+            }
+          }
+        }
+      }
+    });
+    
+    const rawText = response.text || "{}";
+    const parsed = JSON.parse(rawText.trim());
+    
+    if (parsed.novoStatusId && parsed.novoStatusId > 0 && parsed.novoStatusId !== leadData.status_id) {
+      console.log(`[Gemini Routing] Moving lead ${leadData.id} to status ${parsed.novoStatusId} (was ${leadData.status_id})`);
+      
+      const patchRes = await axios.patch(
+        `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
+        [
+          {
+            id: leadData.id,
+            status_id: parsed.novoStatusId
+          }
+        ],
+        axiosConfig
+      );
+
+      // Update cache so subsequent messages know the new status
+      try {
+        await prisma.kommoLeadCache.updateMany({
+          where: { leadId: leadData.id, tenantId: connection.tenantId },
+          data: { statusId: parsed.novoStatusId }
+        });
+      } catch (err: any) {
+        console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
+      }
+      
+      return parsed.novoStatusId;
+    }
+  } catch (error: any) {
+    console.error('[Gemini Routing] Erro ao processar:', error.response?.data || error.message);
+  }
+  return null;
 }
 
 /**
@@ -755,7 +848,15 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
 
     const { exists: lead_existe, lead: finalLeadData } = await fetchLeadData(tenantId, telefone_whatsapp, connection);
 
-    // 4. Repasse completo para o n8n
+    // 4. Analisa a mensagem com Gemini para mover de etapa (opcional/baseado na intenção)
+    if (lead_existe && finalLeadData) {
+      const newStatusId = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData);
+      if (newStatusId) {
+        finalLeadData.status_id = newStatusId;
+      }
+    }
+
+    // 5. Repasse completo para o n8n
     const webhookSetting = await prisma.systemSetting.findUnique({ where: { key: 'N8N_WEBHOOK_URL' } });
     const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
     
