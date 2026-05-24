@@ -5,8 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity } from 'lucide-react';
 import WhatsAppConnection from './components/WhatsAppConnection';
+import LogsViewer from './components/LogsViewer';
 
 interface Connection {
   id: string;
@@ -29,6 +30,7 @@ export default function App() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
+  const [selectedTenantForLogs, setSelectedTenantForLogs] = useState<string | null>(null);
 
   const fetchSettings = async () => {
     try {
@@ -244,6 +246,14 @@ export default function App() {
                             </button>
                             <span className="text-zinc-800">|</span>
                             <button
+                              onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                              className="text-zinc-500 hover:text-purple-400 transition-colors flex items-center gap-1.5 text-xs"
+                              title="Logs"
+                            >
+                              <Activity className="w-4 h-4" /> Logs
+                            </button>
+                            <span className="text-zinc-800">|</span>
+                            <button
                               onClick={() => toggleStatus(conn.id)}
                               className="text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs"
                               title="Pausar / Desativar"
@@ -292,7 +302,15 @@ export default function App() {
                         <td className="px-4 py-3 truncate max-w-[150px]">{conn.kommoSubdomain}.kommo.com</td>
                         <td className="px-4 py-3">{formatDate(conn.updatedAt)}</td>
                         <td className="px-4 py-3 text-right">
-                           <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                           <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity gap-3">
+                            <button
+                              onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                              className="text-zinc-500 hover:text-purple-400 transition-colors flex items-center gap-1.5 text-xs"
+                              title="Logs"
+                            >
+                              <Activity className="w-4 h-4" /> Logs
+                            </button>
+                            <span className="text-zinc-800 hidden md:inline">|</span>
                             <button
                               onClick={() => toggleStatus(conn.id)}
                               className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 text-xs"
@@ -310,6 +328,15 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {selectedTenantForLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
+          <LogsViewer 
+            tenantId={selectedTenantForLogs} 
+            onClose={() => setSelectedTenantForLogs(null)} 
+          />
+        </div>
+      )}
 
       {selectedTenantForQR && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
