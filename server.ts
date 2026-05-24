@@ -318,9 +318,9 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
 async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, leadData: any) {
   try {
     if (!leadData || !leadData.pipeline_id || !leadData.status_id) return null;
-    const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAH3nGvrUfV2SFvCVhABOJ5qLdVX-KbdEI";
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[Gemini Routing] GEMINI_API_KEY não configurada. Pulando análise IA.');
+      console.warn('[Gemini Routing] GEMINI_API_KEY não configurada. Pulando análise IA. (Você precisa configurar a chave no painel de configurações do app)');
       return null;
     }
     
@@ -395,7 +395,7 @@ Sua tarefa:
 `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
