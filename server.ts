@@ -402,7 +402,7 @@ Sua tarefa:
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            novoStatusId: { type: Type.NUMBER },
+            novoStatusId: { type: Type.NUMBER, description: "ID exato da nova etapa, ou da etapa atual se não houver mudança" },
             custom_fields: { 
               type: Type.ARRAY, 
               items: {
@@ -411,10 +411,12 @@ Sua tarefa:
                   field_id: { type: Type.NUMBER, description: "ID of the custom field" },
                   field_name: { type: Type.STRING, description: "Name of the custom field" },
                   value: { type: Type.STRING, description: "Extracted value for the field" }
-                }
+                },
+                required: ["field_id", "field_name", "value"]
               }
             }
-          }
+          },
+          required: ["novoStatusId", "custom_fields"]
         }
       }
     });
@@ -989,8 +991,8 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
       };
 
       // 1. Injetar todos os custom fields atuais do Lead no payload dinamicamente
-      if (finalLeadData && finalLeadData.custom_fields_values && Array.isArray(finalLeadData.custom_fields_values)) {
-        finalLeadData.custom_fields_values.forEach((cf: any) => {
+      if (finalLeadData && (finalLeadData as any).custom_fields_values && Array.isArray((finalLeadData as any).custom_fields_values)) {
+        (finalLeadData as any).custom_fields_values.forEach((cf: any) => {
           if (cf.field_name && cf.values && cf.values.length > 0) {
             payloadToN8n[cf.field_name] = cf.values[0].value;
           }
