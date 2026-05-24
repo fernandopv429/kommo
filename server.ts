@@ -929,12 +929,22 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
 
         // Variáveis mapeadas diretamente para facilitar o uso no n8n ($json.Lead_id, etc)
         Lead_id: finalLeadData ? finalLeadData.id : null,
-        NOme: finalLeadData ? finalLeadData.name : "",
+        Nome: finalLeadData ? finalLeadData.name : "",
         Status_id: ai_parsed.novoStatusId > 0 ? ai_parsed.novoStatusId : (finalLeadData ? finalLeadData.status_id : null),
         has_update: (ai_parsed.novoStatusId > 0 && ai_parsed.novoStatusId !== (finalLeadData ? finalLeadData.status_id : null)) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
-        campos_personalizados: ai_parsed.custom_fields || []
+        campos_personalizados_atualizados_ia: ai_parsed.custom_fields || []
       };
 
+      // 1. Injetar todos os custom fields atuais do Lead no payload dinamicamente
+      if (finalLeadData && finalLeadData.custom_fields_values && Array.isArray(finalLeadData.custom_fields_values)) {
+        finalLeadData.custom_fields_values.forEach((cf: any) => {
+          if (cf.field_name && cf.values && cf.values.length > 0) {
+            payloadToN8n[cf.field_name] = cf.values[0].value;
+          }
+        });
+      }
+
+      // 2. Sobrescrever com os campos identificados pela IA (se houver atualização nessa interação)
       if (ai_parsed.custom_fields && Array.isArray(ai_parsed.custom_fields)) {
         ai_parsed.custom_fields.forEach((cf: any) => {
           if (cf.field_name && cf.value) {
