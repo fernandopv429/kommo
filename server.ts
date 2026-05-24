@@ -340,6 +340,24 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
       name: s.name,
       description: s.description || "" // muitas vezes a dica fica na description, ou o proprio nome serve de dica
     }));
+
+    // Buscar campos personalizados
+    let customFieldsContext = "";
+    try {
+      const cfRes = await axios.get(
+        `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/custom_fields`,
+        axiosConfig
+      );
+      const customFieldsRaw = cfRes.data?._embedded?.custom_fields || [];
+      const cfs = customFieldsRaw.map((cf: any) => ({
+        id: cf.id,
+        name: cf.name,
+        type: cf.type
+      }));
+      customFieldsContext = `\nAqui estão os campos personalizados disponíveis do Lead:\n${JSON.stringify(cfs, null, 2)}`;
+    } catch (err: any) {
+      console.warn('[Gemini Routing] Falha ao buscar custom fields', err.message);
+    }
     
     const ai = new GoogleGenAI({ apiKey });
     
@@ -350,15 +368,14 @@ O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
 
 Aqui estão as etapas (statuses) disponíveis no funil (pipeline) atual do lead:
 ${JSON.stringify(statuses, null, 2)}
+${customFieldsContext}
 
 Sua tarefa:
 1. Avaliar se o Lead DEVE ser movido para outa etapa. Se sim, retorne o numero do ID da nova etapa. Se não, retorne -1.
-2. Extrair informações para atualizar os campos personalizados do lead, caso a mensagem mencione:
-   - Profissional (nome do profissional se aplicável)
-   - Pais (país de origem/moradia)
-   - Tipo de tatoo (pequena, grande, realista, etc)
-
-Se não encontrar a informação, retorne null no respectivo campo.`;
+2. Identificar se a mensagem traz informações ("intent") para preencher algum dos campos personalizados disponíveis. 
+   Extraia os dados relevantes e relacione-os usando "field_id" e "field_name", além do "value".
+   Retorne no array 'custom_fields' apenas se achar informacoes correspondentes aos campos.
+`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",
@@ -369,9 +386,17 @@ Se não encontrar a informação, retorne null no respectivo campo.`;
           type: Type.OBJECT,
           properties: {
             novoStatusId: { type: Type.NUMBER },
-            profissional: { type: Type.STRING, nullable: true },
-            pais: { type: Type.STRING, nullable: true },
-            tipoDeTatoo: { type: Type.STRING, nullable: true }
+            custom_fields: { 
+              type: Type.ARRAY, 
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  field_id: { type: Type.NUMBER, description: "ID of the custom field" },
+                  field_name: { type: Type.STRING, description: "Name of the custom field" },
+                  value: { type: Type.STRING, description: "Extracted value for the field" }
+                }
+              }
+            }
           }
         }
       }
@@ -381,9 +406,13 @@ Se não encontrar a informação, retorne null no respectivo campo.`;
     const parsed = JSON.parse(rawText.trim());
     
     const fieldsToUpdate: any[] = [];
-    if (parsed.profissional) fieldsToUpdate.push({ field_id: 2857590, values: [{ value: parsed.profissional }] });
-    if (parsed.pais) fieldsToUpdate.push({ field_id: 3021266, values: [{ value: parsed.pais }] });
-    if (parsed.tipoDeTatoo) fieldsToUpdate.push({ field_id: 3021298, values: [{ value: parsed.tipoDeTatoo }] });
+    if (parsed.custom_fields && Array.isArray(parsed.custom_fields)) {
+      parsed.custom_fields.forEach((cf: any) => {
+        if (cf.field_id && cf.value) {
+          fieldsToUpdate.push({ field_id: Number(cf.field_id), values: [{ value: cf.value }] });
+        }
+      });
+    }
 
     const hasStatusChange = parsed.novoStatusId && parsed.novoStatusId > 0 && parsed.novoStatusId !== leadData.status_id;
     const hasFields = fieldsToUpdate.length > 0;
@@ -887,7 +916,7 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
     const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
     
     if (n8nUrl) {
-      const payloadToN8n = {
+      const payloadToN8n: any = {
         mensagem_whatsapp,
         telefone_whatsapp,
         lead_existe,
@@ -900,11 +929,17 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
         Lead_id: finalLeadData ? finalLeadData.id : null,
         NOme: finalLeadData ? finalLeadData.name : "",
         Status_id: ai_parsed.novoStatusId > 0 ? ai_parsed.novoStatusId : (finalLeadData ? finalLeadData.status_id : null),
-        Profissional: ai_parsed.profissional || "",
-        Pais: ai_parsed.pais || "",
-        "Tipo de tatoo": ai_parsed.tipoDeTatoo || "",
-        has_update: Object.keys(ai_parsed).length > 0
+        has_update: (ai_parsed.novoStatusId > 0 && ai_parsed.novoStatusId !== (finalLeadData ? finalLeadData.status_id : null)) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
+        campos_personalizados: ai_parsed.custom_fields || []
       };
+
+      if (ai_parsed.custom_fields && Array.isArray(ai_parsed.custom_fields)) {
+        ai_parsed.custom_fields.forEach((cf: any) => {
+          if (cf.field_name && cf.value) {
+            payloadToN8n[cf.field_name] = cf.value;
+          }
+        });
+      }
 
       await axios.post(n8nUrl, payloadToN8n);
       console.log(`[Evolution Webhook] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
