@@ -107,7 +107,8 @@ app.get('/api/settings/:key', async (req: Request, res: Response) => {
     const setting = await prisma.systemSetting.findUnique({ where: { key } });
     res.json({ value: setting?.value || '' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(`[Settings] Erro no banco de dados para a chave ${req.params.key}:`, error.message);
+    res.status(200).json({ value: '' });
   }
 });
 
@@ -135,9 +136,14 @@ app.post('/api/settings', async (req: Request, res: Response) => {
  * Helper: Busca Lead na Base (Cache) ou na API da Kommo
  */
 async function fetchLeadData(tenantId: string, telefone_limpo: string, connection: any) {
-  const cachedLead = await prisma.kommoLeadCache.findUnique({
-    where: { tenantId_phoneNumber: { tenantId, phoneNumber: telefone_limpo } }
-  });
+  let cachedLead = null;
+  try {
+    cachedLead = await prisma.kommoLeadCache.findUnique({
+      where: { tenantId_phoneNumber: { tenantId, phoneNumber: telefone_limpo } }
+    });
+  } catch (err: any) {
+    console.warn('[DB] Cache indisponível, buscando direto na API:', err.message);
+  }
 
   if (cachedLead) {
     const rawCustomFields = cachedLead.customFields as any || {};
@@ -439,36 +445,43 @@ Sua tarefa:
     const hasFields = fieldsToUpdate.length > 0;
 
     if (hasStatusChange || hasFields) {
-      console.log(`[Gemini Routing] Updating Lead ${leadData.id}. Status change: ${hasStatusChange}, Fields: ${fieldsToUpdate.length}`);
+      console.log(`[Gemini Routing] Atualizando Lead ${leadData.id}. Mudança de status: ${hasStatusChange}, Campos: ${fieldsToUpdate.length}`);
       
+      // CORREÇÃO: A Kommo precisa apenas do ID do lead na raiz para identificar o registro
       const patchData: any = { 
-        id: Number(leadData.id),
-        pipeline_id: Number(leadData.pipeline_id)
+        id: Number(leadData.id)
       };
-      if (leadData.name) patchData.name = leadData.name;
-      if (hasStatusChange) patchData.status_id = Number(parsed.novoStatusId);
-      if (hasFields) patchData.custom_fields_values = fieldsToUpdate;
+      
+      // Se houver alteração de etapa, envie APENAS o status_id (remover pipeline_id evita conflitos na API v4)
+      if (hasStatusChange) {
+        patchData.status_id = Number(parsed.novoStatusId);
+      }
+      
+      if (hasFields) {
+        patchData.custom_fields_values = fieldsToUpdate;
+      }
 
       try {
+        // A Kommo espera uma Array de objetos no PATCH de leads
         const patchRes = await axios.patch(
           `https://${connection.kommoSubdomain}.kommo.com/api/v4/leads`,
           [ patchData ],
           axiosConfig
         );
-        console.log(`[Gemini Routing] Update successful.`);
+        console.log(`[Gemini Routing] Atualização realizada com sucesso na Kommo.`);
       } catch(e: any) {
-        console.error(`[Gemini Routing] Update failed: `, e.response?.data || e.message);
+        console.error(`[Gemini Routing] Falha na atualização na Kommo: `, e.response?.data || e.message);
       }
 
       if (hasStatusChange) {
-        // Update cache so subsequent messages know the new status
+        // Atualiza o cache local para que as próximas mensagens reconheçam a nova etapa
         try {
           await prisma.kommoLeadCache.updateMany({
             where: { leadId: leadData.id, tenantId: connection.tenantId },
             data: { statusId: parsed.novoStatusId }
           });
         } catch (err: any) {
-          console.warn('[Gemini Routing] Erro ao atualizar cache:', err.message);
+          console.warn('[Gemini Routing] Erro ao atualizar cache local:', err.message);
         }
       }
     }
@@ -676,7 +689,8 @@ app.get('/api/connections', async (req: Request, res: Response) => {
     res.json(connections);
   } catch (e: unknown) {
     const err = e as Error;
-    res.status(500).json({ error: err.message });
+    console.error('[API] Erro ao buscar conexões:', err.message);
+    res.status(200).json([]);
   }
 });
 
