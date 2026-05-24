@@ -281,22 +281,12 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
         }
       }
 
-      await prisma.kommoLeadCache.create({
-        data: {
-          tenantId,
-          phoneNumber: telefone_limpo,
-          leadId: latestLead.id,
-          name: latestLead.name,
-          price: latestLead.price,
-          statusId: latestLead.status_id,
-          pipelineId: latestLead.pipeline_id,
-          tags,
-          customFields: { ...custom_fields, _contatoObj: contatoObj }
-        }
-      });
+      // Removendo o .create sincrono daqui para não travar a automação caso o cache falhe
+      // Faremos o upsert no final do fluxo, conforme pedido.
 
       return {
         exists: true,
+        source: 'api', // Flag para indicar que veio da API e precisa ser persistido
         lead: {
           id: latestLead.id,
           nome_card: latestLead.name,
@@ -1001,7 +991,7 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
       if (updatedConn) connection.accessToken = updatedConn.accessToken;
     }
 
-    const { exists: lead_existe, lead: finalLeadData } = await fetchLeadData(tenantId, telefone_whatsapp, connection);
+    const { exists: lead_existe, lead: finalLeadData, source: lead_source } = await fetchLeadData(tenantId, telefone_whatsapp, connection) as any;
 
     // 4. Analisa a mensagem com Gemini para mover de etapa (opcional/baseado na intenção)
     let ai_parsed: any = {};
@@ -1091,6 +1081,38 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
       console.log(`[Evolution Webhook] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
     } else {
       console.warn('[Evolution] Webhook centralizador N8N não configurado no servidor (banco de dados ou .env).');
+    }
+
+    // 6. Atualiza o cache persistente APÓS enviar para o webhook (conforme requisito)
+    if (lead_existe && finalLeadData && lead_source === 'api') {
+      try {
+        await prisma.kommoLeadCache.upsert({
+          where: { tenantId_phoneNumber: { tenantId, phoneNumber: telefone_whatsapp } },
+          create: {
+            tenantId,
+            phoneNumber: telefone_whatsapp,
+            leadId: finalLeadData.id,
+            name: finalLeadData.name,
+            price: finalLeadData.price || 0,
+            statusId: finalLeadData.status_id,
+            pipelineId: finalLeadData.pipeline_id,
+            tags: finalLeadData.tags || [],
+            customFields: { ...(finalLeadData.custom_fields || {}), _contatoObj: finalLeadData.contato }
+          },
+          update: {
+            leadId: finalLeadData.id,
+            name: finalLeadData.name,
+            price: finalLeadData.price || 0,
+            statusId: finalLeadData.status_id,
+            pipelineId: finalLeadData.pipeline_id,
+            tags: finalLeadData.tags || [],
+            customFields: { ...(finalLeadData.custom_fields || {}), _contatoObj: finalLeadData.contato }
+          }
+        });
+        console.log(`[Evolution Webhook] Cache persistente atualizado com sucesso após envio N8N (Lead ID: ${finalLeadData.id})`);
+      } catch (cacheErr: any) {
+        console.warn('[Evolution Webhook] Falha ao preencher cache persistente (ignorando para não travar automação):', cacheErr.message);
+      }
     }
 
     res.status(200).send('OK');
