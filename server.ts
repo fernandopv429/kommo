@@ -370,15 +370,16 @@ Mensagem do Lead: "${mensagem_whatsapp}"
 
 O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
 
-Aqui estão as etapas (statuses) disponíveis no funil atual do lead, em ordem, junto com as descrições de quando um lead deve estar nelas:
+Aqui estão as etapas (statuses) disponíveis no funil atual do lead, em ordem, junto com seus nomes e descrições.
+Muita atenção ao "name" da etapa: se a mensagem do cliente indicar forte intenção ou pedido correspondente ao NOME da etapa (ex: cliente quer "agendar", e existe uma etapa "Agendamento"), você DEVE movê-lo para essa etapa imediatamente.
 ${JSON.stringify(statuses, null, 2)}
 
 ${customFieldsContext}
 
 Sua tarefa:
-1. Avalie se o Lead fez algo que corresponda ao avanço para uma NOVA ETAPA do funil, baseado nas descrições de cada etapa e na mensagem enviada.
-   - Se o lead deve avançar ou mudar de etapa, retorne o numero do "ID" exato da nova etapa correspondente (novoStatusId).
-   - Se o lead deve PERMANECER na etapa atual (a mensagem não justifica avanço nem retrocesso), retorne exatamente o ID da etapa atual (${leadData.status_id}).
+1. Avalie se o Lead fez algo que corresponda ao avanço para uma NOVA ETAPA do funil, baseado ÚNICA E EXCLUSIVAMENTE nas intenções claras da mensagem dele relacionadas aos nomes das etapas ou descrições.
+   - Se a intenção do cliente for compatível com uma etapa futura (ex: pediu agendamento -> etapa de agendamento), retorne o "ID" numérico dessa nova etapa em (novoStatusId).
+   - Se o lead deve PERMANECER na etapa atual (a mensagem não justifica mudança de contexto), retorne o ID da etapa atual (${leadData.status_id}).
 2. Identifique se a mensagem traz informações ("intent") para preencher algum dos campos personalizados disponíveis.
    - Extraia os dados relevantes e relacione-os usando "field_id" e "field_name", além do "value".
    - Retorne no array 'custom_fields' apenas se achar informacoes correspondentes aos campos.
