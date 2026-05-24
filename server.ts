@@ -472,21 +472,24 @@ Retorne exclusivamente o JSON preenchido.`;
     if (hasStatusChange || hasFields) {
       console.log(`[AI Routing] PREPARANDO ATUALIZAÇÃO PARA O LEAD ID: ${leadData.id}`);
       if (hasStatusChange) {
-        console.log(`[AI Routing] -> STATUS: Lead será movido do ID ${leadData.status_id} para ${parsed.novoStatusId}`);
+        const novoStatusObj = statuses.find((s: any) => Number(s.id) === novoStatus);
+        const nomeNovoStatus = novoStatusObj ? novoStatusObj.name : "Desconhecido";
+        console.log(`[AI Routing] -> STATUS: Lead será movido do ID ${leadData.status_id} (${nomeEtapaAtual}) para ${novoStatus} (${nomeNovoStatus}) - Pipeline ID mapeado: ${leadData.pipeline_id}`);
       }
       if (hasFields) {
         console.log(`[AI Routing] -> CAMPOS: ${fieldsToUpdate.length} campo(s) será(ão) atualizado(s)`);
         console.log(`[AI Routing] -> DETALHE DOS CAMPOS: ${JSON.stringify(fieldsToUpdate)}`);
       }
       
-      // CORREÇÃO: A Kommo precisa apenas do ID do lead na raiz para identificar o registro
+      // Atribuir o ID principal do lead
       const patchData: any = { 
         id: Number(leadData.id)
       };
       
-      // Se houver alteração de etapa, envie APENAS o status_id (remover pipeline_id evita conflitos na API v4)
+      // Se houver alteração de etapa, enviamos o status_id (e o pipeline_id para evitar erro de pipeline mismatch)
       if (hasStatusChange) {
         patchData.status_id = Number(parsed.novoStatusId);
+        patchData.pipeline_id = Number(leadData.pipeline_id);
       }
       
       if (hasFields) {
