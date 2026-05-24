@@ -474,9 +474,29 @@ Sua tarefa:
           [ patchData ],
           axiosConfig
         );
-        console.log(`[Gemini Routing] Atualização realizada com sucesso na Kommo.`);
-      } catch(e: any) {
-        console.error(`[Gemini Routing] Falha na atualização na Kommo: `, e.response?.data || e.message);
+        console.log(`[AI Routing] Atualização realizada com sucesso na Kommo.`);
+      } catch (e: any) {
+        const errorData = e.response?.data;
+        const isLeadNotFound = e.response?.status === 400 && 
+          (JSON.stringify(errorData).includes('Lead not found') || JSON.stringify(errorData).includes('not_found'));
+
+        if (isLeadNotFound) {
+          console.warn(`[AI Routing] Lead ID ${leadData.id} não existe mais na Kommo (provavelmente foi excluído). Limpando cache para o telefone ${leadData.telefone || leadData.phoneNumber}...`);
+          
+          try {
+            await prisma.kommoLeadCache.deleteMany({
+              where: { 
+                tenantId: connection.tenantId,
+                leadId: Number(leadData.id)
+              }
+            });
+            console.log(`[AI Routing] Cache obsoleto removido com sucesso. Na próxima mensagem o sistema buscará o ID novo.`);
+          } catch (cacheErr: any) {
+            console.error('[AI Routing] Erro ao deletar cache obsoleto:', cacheErr.message);
+          }
+        } else {
+          console.error(`[AI Routing] Falha na atualização na Kommo: `, errorData || e.message);
+        }
       }
 
       if (hasStatusChange) {
