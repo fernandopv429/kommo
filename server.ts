@@ -377,28 +377,40 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
     
     const openai = new OpenAI({ apiKey });
     
-    const prompt = `Você é um analista de CRM inteligente responsável por mover leads pelas etapas do funil de vendas (pipeline), e atualizar os dados do lead baseado no que ele falar.
+    // 1. Encontrar o nome amigável da etapa atual para dar contexto real à IA
+    const etapaAtualObj = statuses.find((s: any) => Number(s.id) === Number(leadData.status_id));
+    const nomeEtapaAtual = etapaAtualObj ? etapaAtualObj.name : "Desconhecida";
 
-Analise a seguinte mensagem recente do Lead (usuário/cliente):
-Mensagem do Lead: "${mensagem_whatsapp}"
+    const prompt = `Você é um analista de CRM inteligente e perspicaz, responsável por mover leads pelas etapas do funil de vendas (pipeline) baseado estritamente na intenção da última mensagem comercial enviada pelo cliente.
 
-O Lead está atualmente na etapa (status) de ID: ${leadData.status_id}.
+=== CONTEXTO ATUAL DO LEAD ===
+- Última Mensagem do Lead: "${mensagem_whatsapp}"
+- Etapa Onde o Lead Está Agora: ID ${leadData.status_id} (Nome da Etapa: "${nomeEtapaAtual}")
 
-Aqui estão as etapas (statuses) disponíveis no funil atual do lead, em ordem, junto com seus nomes e descrições.
-Muita atenção ao "name" da etapa: se a mensagem do cliente indicar forte intenção ou pedido correspondente ao NOME da etapa (ex: cliente quer "agendar", e existe uma etapa "Agendamento"), você DEVE movê-lo para essa etapa imediatamente.
+=== ETAPAS DISPONÍVEIS NO FUNIL ===
+Analise os NOMES e as DESCRIÇÕES abaixo para identificar para onde o lead deve avançar:
 ${JSON.stringify(statuses, null, 2)}
 
 ${customFieldsContext}
 
-Sua tarefa:
-1. Avalie se o Lead fez algo que corresponda ao avanço para uma NOVA ETAPA do funil, baseado ÚNICA E EXCLUSIVAMENTE nas intenções claras da mensagem dele relacionadas aos nomes das etapas ou descrições.
-   - Se a intenção do cliente for compatível com uma etapa futura (ex: pediu agendamento -> etapa de agendamento), retorne o "ID" numérico dessa nova etapa em (novoStatusId).
-   - Se o lead deve PERMANECER na etapa atual (a mensagem não justifica mudança de contexto), retorne o ID da etapa atual (${leadData.status_id}).
-2. Identifique se a mensagem traz informações ("intent") para preencher algum dos campos personalizados disponíveis.
-   - Extraia os dados relevantes e relacione-os usando "field_id" e "field_name", além do "value".
-   - Retorne no array 'custom_fields' apenas se achar informacoes correspondentes aos campos.
-   - Se nenhum campo foi identificado, retorne um array vazio [].
-`;
+=== REGRAS DE TRANSIÇÃO CRÍTICAS ===
+1. Compare a intenção da "Última Mensagem do Lead" com as Etapas Disponíveis.
+2. Se a mensagem do cliente indicar de forma clara e forte uma ação correspondente ao NOME ou objetivo de uma etapa futura, você DEVE retornar o ID dessa nova etapa no campo "novoStatusId".
+   - Se o cliente diz "Gostaria de realizar um agendamento" ou algo similar, e existe uma etapa chamada "Agendamento" ou "Visita", mude para o ID dessa etapa.
+   - Se o cliente diz "Ok, damos fechar o projeto", "Quero fechar" ou "Onde assino?", e existe uma etapa chamada "Fechamento", "Contrato" ou "Ganho", mude para o ID dessa etapa.
+3. Se a mensagem for apenas um agradecimento ("Obrigado"), uma saudação ("Olá", "Tudo bem?") ou uma dúvida genérica que não altera o momento comercial do lead, ele DEVE PERMANECER na etapa atual. Nesse caso, retorne exatamente o ID atual: ${leadData.status_id}.
+
+=== PREENCHIMENTO DE CAMPOS PERSONALIZADOS ===
+Sua tarefa também inclui identificar se a mensagem traz informações para preencher campos personalizados:
+- Se houver dados (ex: email, nome, CPF) que correspondam a um campo listado, preencha a array 'custom_fields' com 'field_id', 'field_name', e 'value'.
+- Se não houver dados, retorne uma array vazia [].
+
+=== EXEMPLOS DE COMPORTAMENTO ===
+- Mensagem: "Quero agendar uma reunião" -> Se houver a etapa "Agendamento" (ID 12345), Saída: {"novoStatusId": 12345, "custom_fields": []}
+- Mensagem: "Beleza, valeu!" -> Saída (MANTÉM): {"novoStatusId": ${leadData.status_id}, "custom_fields": []}
+- Mensagem: "Meu email é ola@teste.com" -> Saída (MANTÉM STATUS, ATUALIZA CAMPO): {"novoStatusId": ${leadData.status_id}, "custom_fields": [{"field_id": 999123, "field_name": "Email", "value": "ola@teste.com"}]}
+
+Retorne exclusivamente o JSON preenchido.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
