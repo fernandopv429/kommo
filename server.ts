@@ -9,7 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { createServer as createViteServer } from 'vite';
 import cron from 'node-cron';
 import { refreshKommoToken, ensureValidKommoToken, registerKommoWebhook } from './src/lib/kommo-auth';
-import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 const EVOLUTION_URL = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
@@ -324,9 +324,9 @@ async function fetchLeadData(tenantId: string, telefone_limpo: string, connectio
 async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, leadData: any) {
   try {
     if (!leadData || !leadData.pipeline_id || !leadData.status_id) return null;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.warn('[Gemini Routing] GEMINI_API_KEY não configurada. Pulando análise IA. (Você precisa configurar a chave no painel de configurações do app)');
+      console.warn('[AI Routing] OPENAI_API_KEY não configurada. Pulando análise IA. (Você precisa configurar a chave no painel de configurações do app)');
       return null;
     }
     
@@ -375,7 +375,7 @@ async function handleGeminiRouting(connection: any, mensagem_whatsapp: string, l
       console.warn('[Gemini Routing] Falha ao buscar custom fields', err.message);
     }
     
-    const ai = new GoogleGenAI({ apiKey });
+    const openai = new OpenAI({ apiKey });
     
     const prompt = `Você é um analista de CRM inteligente responsável por mover leads pelas etapas do funil de vendas (pipeline), e atualizar os dados do lead baseado no que ele falar.
 
@@ -400,36 +400,42 @@ Sua tarefa:
    - Se nenhum campo foi identificado, retorne um array vazio [].
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            novoStatusId: { type: Type.NUMBER, description: "ID exato da nova etapa, ou da etapa atual se não houver mudança" },
-            custom_fields: { 
-              type: Type.ARRAY, 
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  field_id: { type: Type.NUMBER, description: "ID of the custom field" },
-                  field_name: { type: Type.STRING, description: "Name of the custom field" },
-                  value: { type: Type.STRING, description: "Extracted value for the field" }
-                },
-                required: ["field_id", "field_name", "value"]
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "crm_routing_response",
+          schema: {
+            type: "object",
+            properties: {
+              novoStatusId: { type: "number", description: "ID exato da nova etapa, ou da etapa atual se não houver mudança" },
+              custom_fields: { 
+                type: "array", 
+                items: {
+                  type: "object",
+                  properties: {
+                    field_id: { type: "number", description: "ID of the custom field" },
+                    field_name: { type: "string", description: "Name of the custom field" },
+                    value: { type: "string", description: "Extracted value for the field" }
+                  },
+                  required: ["field_id", "field_name", "value"],
+                  additionalProperties: false
+                }
               }
-            }
+            },
+            required: ["novoStatusId", "custom_fields"],
+            additionalProperties: false
           },
-          required: ["novoStatusId", "custom_fields"]
+          strict: true
         }
       }
     });
     
-    const rawText = response.text || "{}";
+    const rawText = response.choices[0].message.content || "{}";
     const parsed = JSON.parse(rawText.trim());
-    console.log('[Gemini Routing] IA Response Parsed:', JSON.stringify(parsed));
+    console.log('[AI Routing] IA Response Parsed:', JSON.stringify(parsed));
     
     const fieldsToUpdate: any[] = [];
     if (parsed.custom_fields && Array.isArray(parsed.custom_fields)) {
