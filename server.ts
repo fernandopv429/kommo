@@ -1039,7 +1039,7 @@ app.post('/api/tenants/:tenant_id/sync-webhook', async (req: Request, res: Respo
     res.json({ success: true, message: "Webhook sincronizado com a Evolution", url: `${finalUrl}/api/webhooks/evolution/${tenant_id}` });
   } catch (error: any) {
     console.error(`[Evolution] Falha ao sintonizar webhook manual para '${req.params.tenant_id}':`, error.response?.data || error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, details: error.response?.data });
   }
 });
 

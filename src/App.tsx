@@ -60,7 +60,8 @@ export default function App() {
       await axios.post(`/api/tenants/${tenantId}/sync-webhook`);
       alert(`Webhook Evolution atualizado/sintonizado com sucesso.`);
     } catch (e: any) {
-      alert('Erro ao sincronizar webhook na Evolution.');
+      const details = e.response?.data?.details;
+      alert(`Erro ao sincronizar webhook na Evolution.\nDetalhes: ${JSON.stringify(details || e.response?.data || e.message)}`);
     } finally {
       setSyncingTenant(null);
     }
