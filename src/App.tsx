@@ -303,7 +303,7 @@ export default function App() {
                           <span className="text-zinc-500 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
                           <div className="flex items-center gap-2">
                             <code className="flex-1 truncate text-zinc-300 text-xs px-2 py-1.5 bg-zinc-900/80 rounded border border-zinc-800">
-                              {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
+                              {openAiStats[conn.tenantId]?.apiKey ? 'sk-••••••••••••••••••••••••••••••••' : 'Não gerada / Não vinculada'}
                             </code>
                             {!openAiStats[conn.tenantId]?.apiKey && (
                               <button
@@ -483,7 +483,7 @@ export default function App() {
                           <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
                           <div className="flex items-center gap-2">
                             <code className="flex-1 truncate text-zinc-500 text-xs px-2 py-1.5 bg-black/50 rounded border border-zinc-800/50">
-                              {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
+                              {openAiStats[conn.tenantId]?.apiKey ? 'sk-••••••••••••••••••••••••••••••••' : 'Não gerada / Não vinculada'}
                             </code>
                             {!openAiStats[conn.tenantId]?.apiKey && (
                               <button
