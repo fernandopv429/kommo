@@ -233,6 +233,7 @@ app.get('/api/openai/summary', async (req: Request, res: Response) => {
       summaryByTenant[proj.tenantId] = {
         projectId: proj.projectId,
         projectName: proj.projectName,
+        apiKey: proj.apiKey,
         cost: pCost?.amount?.value || 0,
         currency: pCost?.amount?.currency || 'USD',
         tokensInput: pUsage?.n_context_tokens_total || 0,

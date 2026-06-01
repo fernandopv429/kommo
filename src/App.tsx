@@ -5,7 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity, Key } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity, Key, Copy } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import WhatsAppConnection from './components/WhatsAppConnection';
 import LogsViewer from './components/LogsViewer';
 import ManualConnectionModal from './components/ManualConnectionModal';
@@ -241,91 +242,169 @@ export default function App() {
                <h3 className="text-sm font-medium text-zinc-300 uppercase tracking-widest">Ativas</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {activeConnections.length === 0 ? (
                 <div className="col-span-full p-6 text-center text-zinc-600 text-sm border border-zinc-800 rounded bg-black/50">
                   Nenhuma conexão ativa no momento.
                 </div>
               ) : (
-                activeConnections.map((conn) => (
-                  <div key={conn.id} className="bg-black border border-zinc-800 rounded-lg p-5 flex flex-col gap-4 group transition-all hover:bg-zinc-900/30">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <h4 className="text-zinc-200 font-medium text-base truncate">{conn.accountName || conn.tenantId}</h4>
-                        <p className="text-zinc-500 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
+                activeConnections.map((conn) => {
+                  const pieData = [
+                    { name: 'Tokens Entrada', value: openAiStats[conn.tenantId]?.tokensInput || 0, color: '#3b82f6' },
+                    { name: 'Tokens Saída', value: openAiStats[conn.tenantId]?.tokensOutput || 0, color: '#a855f7' }
+                  ].filter(d => d.value > 0);
+
+                  return (
+                    <div key={conn.id} className="bg-black border border-zinc-800 rounded-lg p-5 flex flex-col md:flex-row gap-6 group transition-all hover:bg-zinc-900/30">
+                      
+                      {/* Lado Esquerdo: Info e Botões */}
+                      <div className="flex-1 flex flex-col gap-4 min-w-[50%]">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0 pr-4">
+                            <h4 className="text-zinc-200 font-medium text-lg leading-tight truncate">{conn.accountName || conn.tenantId}</h4>
+                            <p className="text-zinc-500 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
+                          </div>
+                          <div className="flex h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Ativo" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-sm font-mono text-zinc-400 truncate">
+                            <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
+                            <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
+                              {conn.kommoSubdomain}.kommo.com
+                            </span>
+                          </div>
+
+                          <div className="text-sm font-mono text-zinc-400">
+                            <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
+                            <div className="mt-0.5">
+                              {getEvoStatusElement(conn.evolutionState)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Credencial OpenAI (API Key) */}
+                        <div className="text-sm border-t border-zinc-800/80 pt-3 mt-2">
+                          <span className="text-zinc-500 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 truncate text-zinc-300 text-xs px-2 py-1.5 bg-zinc-900/80 rounded border border-zinc-800">
+                              {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
+                            </code>
+                            <button 
+                              onClick={() => {
+                                const key = openAiStats[conn.tenantId]?.apiKey;
+                                if (key) {
+                                  navigator.clipboard.writeText(key);
+                                  alert('API Key copiada para a área de transferência!');
+                                } else {
+                                  alert('Sem API Key para copiar.');
+                                }
+                              }}
+                              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
+                              title="Copiar API Key"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-start gap-2 mt-auto pt-4 border-t border-zinc-800/50">
+                          <button
+                            onClick={() => handleSyncEvolutionWebhook(conn.tenantId)}
+                            disabled={syncingTenant === conn.tenantId}
+                            className="text-zinc-400 hover:text-blue-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            title="Sincronizar Webhook Evolution"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${syncingTenant === conn.tenantId ? 'animate-spin' : ''}`} />
+                          </button>
+                          <button
+                            onClick={() => setSelectedTenantForQR(conn.tenantId)}
+                            className="text-zinc-400 hover:text-emerald-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            title="WhatsApp QR"
+                          >
+                            <Smartphone className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                            className="text-zinc-400 hover:text-purple-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            title="Logs"
+                          >
+                            <Activity className="w-4 h-4" />
+                          </button>
+                          
+                          <div className="flex-1"></div>
+                          
+                          <button
+                            onClick={() => toggleStatus(conn.id)}
+                            className="text-zinc-400 hover:text-red-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            title="Pausar / Desativar"
+                          >
+                            <Pause className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Ativo" />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                       <div className="text-sm font-mono text-zinc-400 truncate">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
-                         <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
-                           {conn.kommoSubdomain}.kommo.com
-                         </span>
-                       </div>
 
-                       <div className="text-sm font-mono text-zinc-400">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
-                         <div className="mt-0.5">
-                           {getEvoStatusElement(conn.evolutionState)}
+                      {/* Lado Direito: Gráfico e Stats OpenAI */}
+                      <div className="w-full md:w-[220px] lg:w-[260px] flex flex-col pt-3 md:pt-0 md:pl-6 md:border-l md:border-zinc-800/50 shrink-0 justify-center">
+                         <h5 className="text-zinc-500 text-[10px] font-sans font-bold uppercase tracking-wider mb-4 border-b border-zinc-800/50 pb-2">Uso OpenAI (Mês)</h5>
+                         
+                         <div className="grid grid-cols-2 gap-4 mb-4">
+                           <div>
+                             <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1 font-mono">Gasto</span>
+                             <span className="text-lg font-medium text-emerald-400 font-mono tracking-tight">
+                               {openAiStats[conn.tenantId]?.cost ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` : '$ 0.00'}
+                             </span>
+                           </div>
+                           <div>
+                             <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1 font-mono">Tokens</span>
+                             <span className="text-lg font-medium text-purple-400 font-mono tracking-tight">
+                               {openAiStats[conn.tenantId]?.tokensTotal ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR') : '0'}
+                             </span>
+                           </div>
                          </div>
-                       </div>
-                       
-                       <div className="text-sm font-mono text-zinc-400">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Custo OpenAI Mês</span>
-                         <span className="truncate block w-full">
-                           {openAiStats[conn.tenantId]?.cost 
-                             ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` 
-                             : '$ 0.00'
-                           }
-                         </span>
-                       </div>
-                       
-                       <div className="text-sm font-mono text-zinc-400">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Tokens OpenAI Mês</span>
-                         <span className="truncate block w-full">
-                           {openAiStats[conn.tenantId]?.tokensTotal 
-                             ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR')
-                             : '0'
-                           }
-                         </span>
-                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2 mt-1 pt-4 border-t border-zinc-800/50">
-                      <button
-                        onClick={() => handleSyncEvolutionWebhook(conn.tenantId)}
-                        disabled={syncingTenant === conn.tenantId}
-                        className="text-zinc-400 hover:text-blue-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
-                        title="Sincronizar Webhook Evolution"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${syncingTenant === conn.tenantId ? 'animate-spin' : ''}`} />
-                      </button>
-                      <button
-                        onClick={() => setSelectedTenantForQR(conn.tenantId)}
-                        className="text-zinc-400 hover:text-emerald-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
-                        title="WhatsApp QR"
-                      >
-                        <Smartphone className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setSelectedTenantForLogs(conn.tenantId)}
-                        className="text-zinc-400 hover:text-purple-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
-                        title="Logs"
-                      >
-                        <Activity className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => toggleStatus(conn.id)}
-                        className="text-zinc-400 hover:text-red-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
-                        title="Pausar / Desativar"
-                      >
-                        <Pause className="w-4 h-4" />
-                      </button>
+                         {pieData.length > 0 ? (
+                           <div className="h-[120px] w-full">
+                             <ResponsiveContainer width="100%" height="100%">
+                               <PieChart>
+                                 <Pie
+                                   data={pieData}
+                                   cx="50%"
+                                   cy="50%"
+                                   innerRadius={30}
+                                   outerRadius={50}
+                                   paddingAngle={2}
+                                   dataKey="value"
+                                   stroke="none"
+                                 >
+                                   {pieData.map((entry, index) => (
+                                     <Cell key={`cell-${index}`} fill={entry.color} />
+                                   ))}
+                                 </Pie>
+                                 <RechartsTooltip 
+                                   contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', fontSize: '12px' }}
+                                   itemStyle={{ color: '#e4e4e7' }}
+                                   formatter={(value: number) => value.toLocaleString('pt-BR')}
+                                 />
+                               </PieChart>
+                             </ResponsiveContainer>
+                           </div>
+                         ) : (
+                           <div className="flex-1 flex items-center justify-center min-h-[120px] text-zinc-600 text-xs font-mono bg-zinc-900/30 rounded border border-dashed border-zinc-800">
+                             Nenhum uso registrado
+                           </div>
+                         )}
+
+                         {pieData.length > 0 && (
+                            <div className="flex justify-center gap-3 mt-2 text-[10px] uppercase tracking-wider font-mono text-zinc-500">
+                               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-blue-500" />Entrada</div>
+                               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-purple-500" />Saída</div>
+                            </div>
+                         )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -342,70 +421,139 @@ export default function App() {
                   Nenhuma conexão inativa.
                 </div>
               ) : (
-                inactiveConnections.map((conn) => (
-                  <div key={conn.id} className="bg-black/50 border border-zinc-800/80 rounded-lg p-5 flex flex-col gap-4 group transition-colors hover:bg-zinc-900/30 opacity-75 hover:opacity-100">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <h4 className="text-zinc-400 font-medium truncate text-base hover:text-zinc-300 transition-colors">{conn.accountName || conn.tenantId}</h4>
-                        <p className="text-zinc-600 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
-                      </div>
-                      <div className="flex h-2 w-2 rounded-full bg-zinc-600 shrink-0 mt-1.5" title="Inativo" />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-sm font-mono text-zinc-500 truncate">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
-                        <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
-                          {conn.kommoSubdomain}.kommo.com
-                        </span>
-                      </div>
+                inactiveConnections.map((conn) => {
+                  const pieData = [
+                    { name: 'Tokens Entrada', value: openAiStats[conn.tenantId]?.tokensInput || 0, color: '#3b82f6' },
+                    { name: 'Tokens Saída', value: openAiStats[conn.tenantId]?.tokensOutput || 0, color: '#a855f7' }
+                  ].filter(d => d.value > 0);
 
-                      <div className="text-sm font-mono text-zinc-500">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
-                        <div className="mt-0.5 opacity-70">
-                          {getEvoStatusElement(conn.evolutionState)}
+                  return (
+                    <div key={conn.id} className="bg-black/50 border border-zinc-800/80 rounded-lg p-5 flex flex-col md:flex-row gap-6 group transition-colors hover:bg-zinc-900/40 opacity-75 hover:opacity-100">
+                      <div className="flex-1 flex flex-col gap-4 min-w-[50%]">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0 pr-4">
+                            <h4 className="text-zinc-400 font-medium truncate text-base hover:text-zinc-300 transition-colors">{conn.accountName || conn.tenantId}</h4>
+                            <p className="text-zinc-600 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
+                          </div>
+                          <div className="flex h-2 w-2 rounded-full bg-zinc-600 shrink-0 mt-2" title="Inativo" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-sm font-mono text-zinc-500 truncate">
+                            <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
+                            <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
+                              {conn.kommoSubdomain}.kommo.com
+                            </span>
+                          </div>
+
+                          <div className="text-sm font-mono text-zinc-500">
+                            <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
+                            <div className="mt-0.5 opacity-70">
+                              {getEvoStatusElement(conn.evolutionState)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Credencial OpenAI (API Key) */}
+                        <div className="text-sm border-t border-zinc-800/50 pt-3 mt-2">
+                          <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 truncate text-zinc-500 text-xs px-2 py-1.5 bg-black/50 rounded border border-zinc-800/50">
+                              {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
+                            </code>
+                            <button 
+                              onClick={() => {
+                                const key = openAiStats[conn.tenantId]?.apiKey;
+                                if (key) {
+                                  navigator.clipboard.writeText(key);
+                                  alert('API Key copiada para a área de transferência!');
+                                } else {
+                                  alert('Sem API Key para copiar.');
+                                }
+                              }}
+                              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-500 hover:text-white transition-colors"
+                              title="Copiar API Key"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-start gap-2 mt-auto pt-4 border-t border-zinc-800/50">
+                          <button
+                            onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                            className="text-zinc-500 hover:text-purple-400 hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                            title="Logs"
+                          >
+                            <Activity className="w-4 h-4" />
+                          </button>
+
+                          <div className="flex-1"></div>
+
+                          <button
+                            onClick={() => toggleStatus(conn.id)}
+                            className="text-zinc-500 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                            title="Start"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="text-sm font-mono text-zinc-500">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Custo OpenAI Mês</span>
-                        <span className="truncate block w-full">
-                           {openAiStats[conn.tenantId]?.cost 
-                             ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` 
-                             : '$ 0.00'
-                           }
-                        </span>
-                      </div>
-                      
-                      <div className="text-sm font-mono text-zinc-500">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Tokens OpenAI Mês</span>
-                        <span className="truncate block w-full">
-                           {openAiStats[conn.tenantId]?.tokensTotal 
-                             ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR')
-                             : '0'
-                           }
-                        </span>
-                      </div>
-                    </div>
+                      {/* Lado Direito: Gráfico e Stats OpenAI */}
+                      <div className="w-full md:w-[220px] lg:w-[260px] flex flex-col pt-3 md:pt-0 md:pl-6 md:border-l md:border-zinc-800/30 shrink-0 justify-center">
+                         <h5 className="text-zinc-600 text-[10px] font-sans font-bold uppercase tracking-wider mb-4 border-b border-zinc-800/30 pb-2">Uso OpenAI (Mês)</h5>
+                         
+                         <div className="grid grid-cols-2 gap-4 mb-4 opacity-70">
+                           <div>
+                             <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1 font-mono">Gasto</span>
+                             <span className="text-lg font-medium text-emerald-500/50 font-mono tracking-tight">
+                               {openAiStats[conn.tenantId]?.cost ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` : '$ 0.00'}
+                             </span>
+                           </div>
+                           <div>
+                             <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1 font-mono">Tokens</span>
+                             <span className="text-lg font-medium text-purple-500/50 font-mono tracking-tight">
+                               {openAiStats[conn.tenantId]?.tokensTotal ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR') : '0'}
+                             </span>
+                           </div>
+                         </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2 mt-1 pt-4 border-t border-zinc-800/50">
-                      <button
-                        onClick={() => setSelectedTenantForLogs(conn.tenantId)}
-                        className="text-zinc-500 hover:text-purple-400 hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
-                        title="Logs"
-                      >
-                        <Activity className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => toggleStatus(conn.id)}
-                        className="text-zinc-500 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
-                        title="Iniciar Contagem"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
+                         {pieData.length > 0 ? (
+                           <div className="h-[120px] w-full opacity-60 grayscale hover:grayscale-0 transition-all">
+                             <ResponsiveContainer width="100%" height="100%">
+                               <PieChart>
+                                 <Pie
+                                   data={pieData}
+                                   cx="50%"
+                                   cy="50%"
+                                   innerRadius={30}
+                                   outerRadius={50}
+                                   paddingAngle={2}
+                                   dataKey="value"
+                                   stroke="none"
+                                 >
+                                   {pieData.map((entry, index) => (
+                                     <Cell key={`cell-${index}`} fill={entry.color} />
+                                   ))}
+                                 </Pie>
+                                 <RechartsTooltip 
+                                   contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', fontSize: '12px' }}
+                                   itemStyle={{ color: '#e4e4e7' }}
+                                   formatter={(value: number) => value.toLocaleString('pt-BR')}
+                                 />
+                               </PieChart>
+                             </ResponsiveContainer>
+                           </div>
+                         ) : (
+                           <div className="flex-1 flex items-center justify-center min-h-[120px] text-zinc-700 text-xs font-mono bg-black/20 rounded border border-dashed border-zinc-800/50">
+                             Nenhum uso registrado
+                           </div>
+                         )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
