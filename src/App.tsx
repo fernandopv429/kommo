@@ -34,6 +34,7 @@ export default function App() {
   const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
   const [selectedTenantForLogs, setSelectedTenantForLogs] = useState<string | null>(null);
   const [showManualConnection, setShowManualConnection] = useState(false);
+  const [openAiStats, setOpenAiStats] = useState<Record<string, any>>({});
 
   const getEvoStatusElement = (state?: string) => {
     switch(state) {
@@ -103,9 +104,19 @@ export default function App() {
     }
   };
 
+  const fetchOpenAiStats = async () => {
+    try {
+      const res = await axios.get('/api/openai/summary');
+      setOpenAiStats(res.data || {});
+    } catch (error) {
+      console.warn('Erro ao buscar sumário da OpenAI', error);
+    }
+  };
+
   useEffect(() => {
     fetchConnections();
     fetchSettings();
+    fetchOpenAiStats();
     
     // Auto-refresh connections list every 15 seconds to update Evolution's status
     const interval = setInterval(() => {
@@ -246,7 +257,7 @@ export default function App() {
                       <div className="flex h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Ativo" />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                        <div className="text-sm font-mono text-zinc-400 truncate">
                          <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
                          <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
@@ -259,6 +270,26 @@ export default function App() {
                          <div className="mt-0.5">
                            {getEvoStatusElement(conn.evolutionState)}
                          </div>
+                       </div>
+                       
+                       <div className="text-sm font-mono text-zinc-400">
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Custo OpenAI Mês</span>
+                         <span className="truncate block w-full">
+                           {openAiStats[conn.tenantId]?.cost 
+                             ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` 
+                             : '$ 0.00'
+                           }
+                         </span>
+                       </div>
+                       
+                       <div className="text-sm font-mono text-zinc-400">
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Tokens OpenAI Mês</span>
+                         <span className="truncate block w-full">
+                           {openAiStats[conn.tenantId]?.tokensTotal 
+                             ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR')
+                             : '0'
+                           }
+                         </span>
                        </div>
                     </div>
 
@@ -321,7 +352,7 @@ export default function App() {
                       <div className="flex h-2 w-2 rounded-full bg-zinc-600 shrink-0 mt-1.5" title="Inativo" />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="text-sm font-mono text-zinc-500 truncate">
                         <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
                         <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
@@ -334,6 +365,26 @@ export default function App() {
                         <div className="mt-0.5 opacity-70">
                           {getEvoStatusElement(conn.evolutionState)}
                         </div>
+                      </div>
+
+                      <div className="text-sm font-mono text-zinc-500">
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Custo OpenAI Mês</span>
+                        <span className="truncate block w-full">
+                           {openAiStats[conn.tenantId]?.cost 
+                             ? `$ ${openAiStats[conn.tenantId].cost.toFixed(2)}` 
+                             : '$ 0.00'
+                           }
+                        </span>
+                      </div>
+                      
+                      <div className="text-sm font-mono text-zinc-500">
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Tokens OpenAI Mês</span>
+                        <span className="truncate block w-full">
+                           {openAiStats[conn.tenantId]?.tokensTotal 
+                             ? openAiStats[conn.tenantId].tokensTotal.toLocaleString('pt-BR')
+                             : '0'
+                           }
+                        </span>
                       </div>
                     </div>
 

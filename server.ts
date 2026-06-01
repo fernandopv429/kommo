@@ -10,6 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import cron from 'node-cron';
 import { refreshKommoToken, ensureValidKommoToken, registerKommoWebhook } from './src/lib/kommo-auth';
 import OpenAI from "openai";
+import { createOpenAiProject, getOpenAiCosts, getOpenAiTokenUsage, getOpenAiProjectsFromDb } from './src/lib/openai-manager';
 
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 const EVOLUTION_URL = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
@@ -127,6 +128,122 @@ app.post('/api/settings', async (req: Request, res: Response) => {
     });
     res.json(setting);
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- ROTAS DE PROJETOS OPENAI --- //
+
+app.post('/api/openai/projects', async (req: Request, res: Response) => {
+  try {
+    const { tenantId, projectName } = req.body;
+    if (!projectName) {
+      res.status(400).json({ error: 'projectName is required' });
+      return;
+    }
+    const newProject = await createOpenAiProject(tenantId || "default", projectName);
+    res.json(newProject);
+  } catch (error: any) {
+    console.error("[OpenAI] Falha ao criar projeto:", error.response?.data || error.message);
+    res.status(500).json({ error: error.message, details: error.response?.data });
+  }
+});
+
+app.get('/api/openai/projects', async (req: Request, res: Response) => {
+  try {
+    const projects = await getOpenAiProjectsFromDb();
+    res.json(projects);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/openai/costs', async (req: Request, res: Response) => {
+  try {
+    const { start_time, end_time, group_by_project } = req.query;
+    if (!start_time) {
+      res.status(400).json({ error: 'start_time is required' });
+      return;
+    }
+    const costs = await getOpenAiCosts(
+      String(start_time), 
+      end_time ? String(end_time) : undefined, 
+      group_by_project === 'true'
+    );
+    res.json(costs);
+  } catch (error: any) {
+    console.error("[OpenAI] Falha ao buscar custos:", error.response?.data || error.message);
+    res.status(500).json({ error: error.message, details: error.response?.data });
+  }
+});
+
+app.get('/api/openai/usage', async (req: Request, res: Response) => {
+  try {
+    const { start_time, group_by_project } = req.query;
+    if (!start_time) {
+      res.status(400).json({ error: 'start_time is required' });
+      return;
+    }
+    const usage = await getOpenAiTokenUsage(
+      String(start_time), 
+      group_by_project === 'true'
+    );
+    res.json(usage);
+  } catch (error: any) {
+    console.error("[OpenAI] Falha ao buscar uso (tokens):", error.response?.data || error.message);
+    res.status(500).json({ error: error.message, details: error.response?.data });
+  }
+});
+
+app.get('/api/openai/summary', async (req: Request, res: Response) => {
+  try {
+    const projects = await getOpenAiProjectsFromDb();
+    if (projects.length === 0) {
+      return res.json({});
+    }
+
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0,0,0,0);
+    const start_time = Math.floor(d.getTime() / 1000).toString();
+
+    let costsRes = { data: [] };
+    let usageRes = { data: [] };
+
+    try {
+      costsRes = await getOpenAiCosts(start_time, undefined, true);
+    } catch(e) {
+      console.warn("Could not fetch costs", e);
+    }
+
+    try {
+      usageRes = await getOpenAiTokenUsage(start_time, true); 
+    } catch(e) {
+      console.warn("Could not fetch usage", e);
+    }
+
+    const summaryByTenant: Record<string, any> = {};
+
+    for (const proj of projects) {
+      if (!proj.tenantId) continue;
+      
+      const pCost = costsRes.data?.find((c: any) => c.project_id === proj.projectId);
+      const pUsage = usageRes.data?.find((u: any) => u.project_id === proj.projectId);
+
+      summaryByTenant[proj.tenantId] = {
+        projectId: proj.projectId,
+        projectName: proj.projectName,
+        cost: pCost?.amount?.value || 0,
+        currency: pCost?.amount?.currency || 'USD',
+        tokensInput: pUsage?.n_context_tokens_total || 0,
+        tokensOutput: pUsage?.n_generated_tokens_total || 0,
+        tokensTotal: (pUsage?.n_context_tokens_total || 0) + (pUsage?.n_generated_tokens_total || 0)
+      };
+    }
+
+    res.json(summaryByTenant);
+  } catch (error: any) {
+    console.error("[OpenAI] Falha ao gerar resumo:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -55,3 +55,13 @@ model SystemSetting {
   key   String @id // e.g., "N8N_WEBHOOK_URL"
   value String
 }
+
+model OpenAiProject {
+  id           String   @id @default(uuid())
+  tenantId     String?  // Relaciona a uma conexão/empresa
+  projectId    String   @unique
+  projectName  String
+  apiKey       String
+  createdAt    DateTime @default(now())
+}
+
