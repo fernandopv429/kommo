@@ -19,6 +19,7 @@ interface Connection {
   isActive: boolean;
   expiresAt: string;
   updatedAt: string;
+  evolutionState?: string;
 }
 
 export default function App() {
@@ -33,6 +34,20 @@ export default function App() {
   const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
   const [selectedTenantForLogs, setSelectedTenantForLogs] = useState<string | null>(null);
   const [showManualConnection, setShowManualConnection] = useState(false);
+
+  const getEvoStatusElement = (state?: string) => {
+    switch(state) {
+      case 'open':
+        return <span className="text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider inline-block">Conectado</span>;
+      case 'close':
+        return <span className="text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider inline-block">Desconectado</span>;
+      case 'connecting':
+        return <span className="text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider inline-block">Conectando...</span>;
+      case 'unknown':
+      default:
+        return <span className="text-zinc-500 bg-zinc-500/10 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider inline-block">Desconhecido</span>;
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -91,6 +106,12 @@ export default function App() {
   useEffect(() => {
     fetchConnections();
     fetchSettings();
+    
+    // Auto-refresh connections list every 15 seconds to update Evolution's status
+    const interval = setInterval(() => {
+      fetchConnections();
+    }, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleConnect = () => {
@@ -227,17 +248,17 @@ export default function App() {
                     
                     <div className="grid grid-cols-2 gap-4">
                        <div className="text-sm font-mono text-zinc-400 truncate">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio</span>
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
                          <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
                            {conn.kommoSubdomain}.kommo.com
                          </span>
                        </div>
 
                        <div className="text-sm font-mono text-zinc-400">
-                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Expira Em</span>
-                         <span className="truncate block w-full" title={formatDate(conn.expiresAt)}>
-                           {formatDate(conn.expiresAt)}
-                         </span>
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
+                         <div className="mt-0.5">
+                           {getEvoStatusElement(conn.evolutionState)}
+                         </div>
                        </div>
                     </div>
 
@@ -302,17 +323,17 @@ export default function App() {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="text-sm font-mono text-zinc-500 truncate">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio</span>
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio API</span>
                         <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
                           {conn.kommoSubdomain}.kommo.com
                         </span>
                       </div>
 
                       <div className="text-sm font-mono text-zinc-500">
-                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Atualizado Em</span>
-                        <span className="truncate block w-full" title={formatDate(conn.updatedAt)}>
-                          {formatDate(conn.updatedAt)}
-                        </span>
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">WhatsApp Status</span>
+                        <div className="mt-0.5 opacity-70">
+                          {getEvoStatusElement(conn.evolutionState)}
+                        </div>
                       </div>
                     </div>
 

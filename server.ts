@@ -742,7 +742,39 @@ app.get('/api/connections', async (req: Request, res: Response) => {
       },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(connections);
+
+    // Fetch instances from Evolution to enrich the data with connection status
+    let evolutionInstances: any[] = [];
+    try {
+      const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
+      const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
+      
+      const response = await axios.get(`${EVOLUTION_URL_EXEC}/instance/fetchInstances`, {
+        headers: { "apikey": EVOLUTION_API_KEY_EXEC }
+      });
+      if (response.data && Array.isArray(response.data)) {
+        evolutionInstances = response.data;
+      }
+    } catch (evoErr: any) {
+      console.warn('[API] Falha ao buscar instâncias da Evolution API:', evoErr.message);
+    }
+
+    const enrichedConnections = connections.map(conn => {
+      const evoInstance = evolutionInstances.find(env => env.instance?.instanceName === conn.tenantId || env.name === conn.tenantId || env.instanceName === conn.tenantId);
+      
+      // Dependendo da versão da Evolution API, o estado pode estar em diferentes campos
+      let evoState = 'unknown';
+      if (evoInstance) {
+         evoState = evoInstance.state || evoInstance.instance?.state || evoInstance.status || evoInstance.connectionStatus || 'disconnected';
+      }
+
+      return {
+        ...conn,
+        evolutionState: evoState
+      };
+    });
+
+    res.json(enrichedConnections);
   } catch (e: unknown) {
     const err = e as Error;
     console.error('[API] Erro ao buscar conexões:', err.message);
@@ -787,6 +819,13 @@ app.post('/api/connections/manual', async (req: Request, res: Response) => {
         isActive: true
       }
     });
+
+    // CHAMADA AUTOMÁTICA O CALLBACK (Criar Instancia Evolution e Webhook)
+    try {
+      await createEvolutionInstance(tenantId);
+    } catch (evoError: any) {
+      console.error(`[Manual Connection] Falha ao criar instancia Evolution para tenant ${tenantId}. Ocorreu no processo paralelo.`, evoError.message);
+    }
 
     res.json(newConnection);
   } catch (error: any) {
