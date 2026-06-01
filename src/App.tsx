@@ -114,6 +114,21 @@ export default function App() {
     }
   };
 
+  const generateOpenAiProject = async (tenantId: string, accountName: string) => {
+    if (!confirm(`Deseja gerar um novo projeto OpenAI para ${accountName || tenantId}?`)) return;
+    try {
+      await axios.post('/api/openai/projects', {
+        tenantId,
+        projectName: accountName || tenantId
+      });
+      alert('Projeto e Credencial gerados com sucesso!');
+      await fetchOpenAiStats();
+    } catch (error: any) {
+      console.error('Erro ao gerar projeto OpenAI', error);
+      alert('Erro ao gerar projeto OpenAI: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   useEffect(() => {
     fetchConnections();
     fetchSettings();
@@ -290,6 +305,15 @@ export default function App() {
                             <code className="flex-1 truncate text-zinc-300 text-xs px-2 py-1.5 bg-zinc-900/80 rounded border border-zinc-800">
                               {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
                             </code>
+                            {!openAiStats[conn.tenantId]?.apiKey && (
+                              <button
+                                onClick={() => generateOpenAiProject(conn.tenantId, conn.accountName || "")}
+                                className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs font-medium transition-colors"
+                                title="Gerar API Key"
+                              >
+                                Gerar
+                              </button>
+                            )}
                             <button 
                               onClick={() => {
                                 const key = openAiStats[conn.tenantId]?.apiKey;
@@ -461,6 +485,15 @@ export default function App() {
                             <code className="flex-1 truncate text-zinc-500 text-xs px-2 py-1.5 bg-black/50 rounded border border-zinc-800/50">
                               {openAiStats[conn.tenantId]?.apiKey || 'Não gerada / Não vinculada'}
                             </code>
+                            {!openAiStats[conn.tenantId]?.apiKey && (
+                              <button
+                                onClick={() => generateOpenAiProject(conn.tenantId, conn.accountName || "")}
+                                className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs font-medium transition-colors"
+                                title="Gerar API Key"
+                              >
+                                Gerar
+                              </button>
+                            )}
                             <button 
                               onClick={() => {
                                 const key = openAiStats[conn.tenantId]?.apiKey;
