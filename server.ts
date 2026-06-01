@@ -34,7 +34,8 @@ async function createEvolutionInstance(tenantId: string) {
             webhookByEvents: true,
             webhookBase64: false,
             events: [
-              "MESSAGES_UPSERT"
+              "MESSAGES_UPSERT",
+              "CONNECTION_UPDATE"
             ]
           }
         },
@@ -749,6 +750,50 @@ app.get('/api/connections', async (req: Request, res: Response) => {
   }
 });
 
+// Adição manual de credenciais
+app.post('/api/connections/manual', async (req: Request, res: Response) => {
+  try {
+    const { tenantId, accountName, kommoAccountId, kommoSubdomain, accessToken, refreshToken } = req.body;
+
+    if (!tenantId || !kommoAccountId || !kommoSubdomain || !accessToken || !refreshToken) {
+      res.status(400).json({ error: 'Existem campos obrigatórios faltando (tenantId, kommoAccountId, kommoSubdomain, accessToken, refreshToken).' });
+      return;
+    }
+
+    // Default expirations for manual token inputs is usually ~24h for Kommo, if they expire sooner the refresh cron will fix it
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const cleanSubdomain = kommoSubdomain.replace('.kommo.com', '').replace('https://', '').replace('/', '');
+
+    const newConnection = await prisma.kommoConnection.upsert({
+      where: { kommoAccountId },
+      update: {
+        tenantId,
+        accountName: accountName || 'Conta Adicionada Manualmente',
+        kommoSubdomain: cleanSubdomain,
+        accessToken,
+        refreshToken,
+        expiresAt,
+        isActive: true
+      },
+      create: {
+        tenantId,
+        accountName: accountName || 'Conta Adicionada Manualmente',
+        kommoAccountId,
+        kommoSubdomain: cleanSubdomain,
+        accessToken,
+        refreshToken,
+        expiresAt,
+        isActive: true
+      }
+    });
+
+    res.json(newConnection);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 3.1 ROTA DE LISTAGEM DE CONTAS DO TENANT
 app.get('/api/tenants/:tenant_id/accounts', async (req: Request, res: Response) => {
   try {
@@ -955,6 +1000,32 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
     const { tenantId } = req.params;
     const body = req.body;
 
+    // Verificar se é evento de conexão (CONNECTION_UPDATE)
+    if (body?.event === 'connection.update') {
+      const state = body?.data?.state || body?.state || body?.data?.status || 'unknown';
+      console.log(`[Evolution Webhook] Status da conexão alterado para o tenant ${tenantId}. Status: ${state}`);
+      
+      const webhookSetting = await prisma.systemSetting.findUnique({ where: { key: 'N8N_WEBHOOK_URL' } });
+      const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
+      
+      if (n8nUrl) {
+         try {
+           await axios.post(n8nUrl, {
+             event_type: 'evolution_connection_update',
+             tenantId: tenantId,
+             state: state,
+             raw_data: body
+           });
+           console.log(`[Evolution Webhook] Evento de desconexão/conexão enviado para o n8n.`);
+         } catch(e: any) {
+           console.warn(`[Evolution Webhook] Falha ao enviar evento de conexão para n8n: ${e.message}`);
+         }
+      }
+      
+      res.status(200).send('Connection update logged');
+      return;
+    }
+
     // Verificar se a mensagem foi enviada por nós mesmos (fromMe)
     if (body?.data?.key?.fromMe === true || body?.data?.fromMe === true) {
       res.status(200).send('Ignored self message');
@@ -1055,15 +1126,16 @@ app.post('/api/webhooks/evolution/:tenantId', async (req: Request, res: Response
         Lead_id: finalLeadData ? finalLeadData.id : null,
         Nome: finalLeadData ? finalLeadData.name : "",
         Status_id: (ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0) ? Number(ai_parsed.novoStatusId) : (finalLeadData ? finalLeadData.status_id : null),
+        campos_personalizados_lead: finalLeadData ? finalLeadData.custom_fields : {},
         has_update: ((ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0 && Number(ai_parsed.novoStatusId) !== Number(finalLeadData ? finalLeadData.status_id : null))) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
         campos_personalizados_atualizados_ia: ai_parsed.custom_fields || []
       };
 
       // 1. Injetar todos os custom fields atuais do Lead no payload dinamicamente
-      if (finalLeadData && (finalLeadData as any).custom_fields_values && Array.isArray((finalLeadData as any).custom_fields_values)) {
-        (finalLeadData as any).custom_fields_values.forEach((cf: any) => {
-          if (cf.field_name && cf.values && cf.values.length > 0) {
-            payloadToN8n[cf.field_name] = cf.values[0].value;
+      if (finalLeadData && finalLeadData.custom_fields) {
+        Object.entries(finalLeadData.custom_fields).forEach(([key, value]) => {
+          if (key && value) {
+            payloadToN8n[key] = value;
           }
         });
       }
@@ -1265,7 +1337,7 @@ app.post('/api/tenants/:tenant_id/sync-webhook', async (req: Request, res: Respo
           url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
           webhookByEvents: true,
           webhookBase64: false,
-          events: ["MESSAGES_UPSERT"]
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"]
         }
       },
       {

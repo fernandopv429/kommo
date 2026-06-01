@@ -5,9 +5,10 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity, Key } from 'lucide-react';
 import WhatsAppConnection from './components/WhatsAppConnection';
 import LogsViewer from './components/LogsViewer';
+import ManualConnectionModal from './components/ManualConnectionModal';
 
 interface Connection {
   id: string;
@@ -31,6 +32,7 @@ export default function App() {
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
   const [selectedTenantForLogs, setSelectedTenantForLogs] = useState<string | null>(null);
+  const [showManualConnection, setShowManualConnection] = useState(false);
 
   const fetchSettings = async () => {
     try {
@@ -130,7 +132,7 @@ export default function App() {
             <p className="text-sm text-zinc-500 mt-2">Gerenciador OAuth 2.0 Kommo (Multi-tenant)</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <input
               type="text"
               value={empresaId}
@@ -143,7 +145,14 @@ export default function App() {
               className="bg-white text-black hover:bg-zinc-200 font-medium py-1.5 px-4 rounded transition-colors flex items-center gap-2 text-sm"
             >
               <ExternalLink className="w-4 h-4" />
-              Nova Conexão
+              Auth
+            </button>
+            <button
+              onClick={() => setShowManualConnection(true)}
+              className="bg-zinc-800 text-zinc-300 hover:bg-zinc-700 font-medium py-1.5 px-4 rounded transition-colors flex items-center gap-2 text-sm border border-zinc-700"
+            >
+              <Key className="w-4 h-4" />
+              Manual
             </button>
           </div>
         </header>
@@ -200,73 +209,72 @@ export default function App() {
                <h3 className="text-sm font-medium text-zinc-300 uppercase tracking-widest">Ativas</h3>
             </div>
             
-            <div className="border border-zinc-800 rounded bg-black overflow-hidden">
-              <table className="w-full text-left text-sm text-zinc-400 font-mono">
-                <thead className="text-xs text-zinc-500 border-b border-zinc-800 bg-zinc-900/20">
-                  <tr>
-                    <th className="px-4 py-3 font-normal">Tenant ID</th>
-                    <th className="px-4 py-3 font-normal">Identificador</th>
-                    <th className="px-4 py-3 font-normal">Domínio</th>
-                    <th className="px-4 py-3 font-normal">Expira Em</th>
-                    <th className="px-4 py-3 font-normal text-right">Opções</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/50">
-                  {activeConnections.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-zinc-600 text-xs">
-                        Nenhuma conexão ativa no momento.
-                      </td>
-                    </tr>
-                  ) : (
-                    activeConnections.map((conn) => (
-                      <tr key={conn.id} className="hover:bg-zinc-900/30 transition-colors group">
-                        <td className="px-4 py-3 text-zinc-300">{conn.tenantId}</td>
-                        <td className="px-4 py-3">{conn.accountName || '-'}</td>
-                        <td className="px-4 py-3 truncate max-w-[150px]">{conn.kommoSubdomain}.kommo.com</td>
-                        <td className="px-4 py-3">{formatDate(conn.expiresAt)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex flex-wrap items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleSyncEvolutionWebhook(conn.tenantId)}
-                              disabled={syncingTenant === conn.tenantId}
-                              className="text-zinc-500 hover:text-blue-400 transition-colors flex items-center gap-1.5 text-xs"
-                              title="Sincronizar Webhook Evolution"
-                            >
-                              <RefreshCw className={`w-4 h-4 ${syncingTenant === conn.tenantId ? 'animate-spin' : ''}`} />
-                              Sync
-                            </button>
-                            <span className="text-zinc-800 hidden md:inline">|</span>
-                            <button
-                              onClick={() => setSelectedTenantForQR(conn.tenantId)}
-                              className="text-zinc-500 hover:text-emerald-400 transition-colors flex items-center gap-1.5 text-xs"
-                              title="WhatsApp QR"
-                            >
-                              <Smartphone className="w-4 h-4" /> QR
-                            </button>
-                            <span className="text-zinc-800">|</span>
-                            <button
-                              onClick={() => setSelectedTenantForLogs(conn.tenantId)}
-                              className="text-zinc-500 hover:text-purple-400 transition-colors flex items-center gap-1.5 text-xs"
-                              title="Logs"
-                            >
-                              <Activity className="w-4 h-4" /> Logs
-                            </button>
-                            <span className="text-zinc-800">|</span>
-                            <button
-                              onClick={() => toggleStatus(conn.id)}
-                              className="text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs"
-                              title="Pausar / Desativar"
-                            >
-                              <Pause className="w-4 h-4" /> Parar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeConnections.length === 0 ? (
+                <div className="col-span-full p-6 text-center text-zinc-600 text-sm border border-zinc-800 rounded bg-black/50">
+                  Nenhuma conexão ativa no momento.
+                </div>
+              ) : (
+                activeConnections.map((conn) => (
+                  <div key={conn.id} className="bg-black border border-zinc-800 rounded-lg p-5 flex flex-col gap-4 group transition-all hover:bg-zinc-900/30">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <h4 className="text-zinc-200 font-medium text-base truncate">{conn.accountName || conn.tenantId}</h4>
+                        <p className="text-zinc-500 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
+                      </div>
+                      <div className="flex h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Ativo" />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="text-sm font-mono text-zinc-400 truncate">
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Domínio</span>
+                         <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
+                           {conn.kommoSubdomain}.kommo.com
+                         </span>
+                       </div>
+
+                       <div className="text-sm font-mono text-zinc-400">
+                         <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1">Expira Em</span>
+                         <span className="truncate block w-full" title={formatDate(conn.expiresAt)}>
+                           {formatDate(conn.expiresAt)}
+                         </span>
+                       </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2 mt-1 pt-4 border-t border-zinc-800/50">
+                      <button
+                        onClick={() => handleSyncEvolutionWebhook(conn.tenantId)}
+                        disabled={syncingTenant === conn.tenantId}
+                        className="text-zinc-400 hover:text-blue-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                        title="Sincronizar Webhook Evolution"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${syncingTenant === conn.tenantId ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button
+                        onClick={() => setSelectedTenantForQR(conn.tenantId)}
+                        className="text-zinc-400 hover:text-emerald-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                        title="WhatsApp QR"
+                      >
+                        <Smartphone className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                        className="text-zinc-400 hover:text-purple-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                        title="Logs"
+                      >
+                        <Activity className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleStatus(conn.id)}
+                        className="text-zinc-400 hover:text-red-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                        title="Pausar / Desativar"
+                      >
+                        <Pause className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -276,54 +284,57 @@ export default function App() {
                <div className="w-2 h-2 rounded-full bg-zinc-600" />
                <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-widest">Inativas</h3>
             </div>
-            <div className="border border-zinc-800/50 rounded bg-black/50 overflow-hidden">
-              <table className="w-full text-left text-sm text-zinc-500 font-mono">
-                 <thead className="text-xs text-zinc-600 border-b border-zinc-800/50">
-                  <tr>
-                    <th className="px-4 py-3 font-normal">Tenant ID</th>
-                    <th className="px-4 py-3 font-normal">Identificador</th>
-                    <th className="px-4 py-3 font-normal">Domínio</th>
-                    <th className="px-4 py-3 font-normal">Atualizado Em</th>
-                    <th className="px-4 py-3 font-normal text-right">Opções</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/30">
-                  {inactiveConnections.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-zinc-700 text-xs">
-                        Nenhuma conexão inativa.
-                      </td>
-                    </tr>
-                  ) : (
-                    inactiveConnections.map((conn) => (
-                      <tr key={conn.id} className="hover:bg-zinc-900/30 transition-colors group">
-                        <td className="px-4 py-3 text-zinc-400">{conn.tenantId}</td>
-                        <td className="px-4 py-3">{conn.accountName || '-'}</td>
-                        <td className="px-4 py-3 truncate max-w-[150px]">{conn.kommoSubdomain}.kommo.com</td>
-                        <td className="px-4 py-3">{formatDate(conn.updatedAt)}</td>
-                        <td className="px-4 py-3 text-right">
-                           <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity gap-3">
-                            <button
-                              onClick={() => setSelectedTenantForLogs(conn.tenantId)}
-                              className="text-zinc-500 hover:text-purple-400 transition-colors flex items-center gap-1.5 text-xs"
-                              title="Logs"
-                            >
-                              <Activity className="w-4 h-4" /> Logs
-                            </button>
-                            <span className="text-zinc-800 hidden md:inline">|</span>
-                            <button
-                              onClick={() => toggleStatus(conn.id)}
-                              className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 text-xs"
-                            >
-                              <Play className="w-4 h-4" /> Start
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {inactiveConnections.length === 0 ? (
+                <div className="col-span-full p-6 text-center text-zinc-700 text-sm border border-zinc-800/50 rounded-lg bg-black/30">
+                  Nenhuma conexão inativa.
+                </div>
+              ) : (
+                inactiveConnections.map((conn) => (
+                  <div key={conn.id} className="bg-black/50 border border-zinc-800/80 rounded-lg p-5 flex flex-col gap-4 group transition-colors hover:bg-zinc-900/30 opacity-75 hover:opacity-100">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <h4 className="text-zinc-400 font-medium truncate text-base hover:text-zinc-300 transition-colors">{conn.accountName || conn.tenantId}</h4>
+                        <p className="text-zinc-600 text-xs font-mono mt-1 w-full truncate" title={conn.tenantId}>ID: {conn.tenantId}</p>
+                      </div>
+                      <div className="flex h-2 w-2 rounded-full bg-zinc-600 shrink-0 mt-1.5" title="Inativo" />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-sm font-mono text-zinc-500 truncate">
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Domínio</span>
+                        <span className="truncate block w-full" title={`${conn.kommoSubdomain}.kommo.com`}>
+                          {conn.kommoSubdomain}.kommo.com
+                        </span>
+                      </div>
+
+                      <div className="text-sm font-mono text-zinc-500">
+                        <span className="text-zinc-700 block text-[10px] uppercase tracking-wider mb-1">Atualizado Em</span>
+                        <span className="truncate block w-full" title={formatDate(conn.updatedAt)}>
+                          {formatDate(conn.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2 mt-1 pt-4 border-t border-zinc-800/50">
+                      <button
+                        onClick={() => setSelectedTenantForLogs(conn.tenantId)}
+                        className="text-zinc-500 hover:text-purple-400 hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                        title="Logs"
+                      >
+                        <Activity className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleStatus(conn.id)}
+                        className="text-zinc-500 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                        title="Iniciar Contagem"
+                      >
+                        <Play className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -343,6 +354,18 @@ export default function App() {
           <WhatsAppConnection 
             tenantId={selectedTenantForQR} 
             onClose={() => setSelectedTenantForQR(null)} 
+          />
+        </div>
+      )}
+
+      {showManualConnection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
+          <ManualConnectionModal 
+            onClose={() => setShowManualConnection(false)} 
+            onSuccess={() => {
+              setShowManualConnection(false);
+              fetchConnections();
+            }}
           />
         </div>
       )}
