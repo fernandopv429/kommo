@@ -227,18 +227,24 @@ app.get('/api/openai/summary', async (req: Request, res: Response) => {
     for (const proj of projects) {
       if (!proj.tenantId) continue;
       
-      const pCost = costsRes.data?.find((c: any) => c.project_id === proj.projectId);
-      const pUsage = usageRes.data?.find((u: any) => u.project_id === proj.projectId);
+      const pCostsForProj = costsRes.data?.filter((c: any) => c.project_id === proj.projectId) || [];
+      const pUsagesForProj = usageRes.data?.filter((u: any) => u.project_id === proj.projectId) || [];
+
+      const totalCost = pCostsForProj.reduce((acc: number, curr: any) => acc + (curr.amount?.value || 0), 0);
+      const currency = pCostsForProj[0]?.amount?.currency || 'USD';
+
+      const tokensInput = pUsagesForProj.reduce((acc: number, curr: any) => acc + (curr.n_context_tokens_total || 0), 0);
+      const tokensOutput = pUsagesForProj.reduce((acc: number, curr: any) => acc + (curr.n_generated_tokens_total || 0), 0);
 
       summaryByTenant[proj.tenantId] = {
         projectId: proj.projectId,
         projectName: proj.projectName,
         apiKey: proj.apiKey,
-        cost: pCost?.amount?.value || 0,
-        currency: pCost?.amount?.currency || 'USD',
-        tokensInput: pUsage?.n_context_tokens_total || 0,
-        tokensOutput: pUsage?.n_generated_tokens_total || 0,
-        tokensTotal: (pUsage?.n_context_tokens_total || 0) + (pUsage?.n_generated_tokens_total || 0)
+        cost: totalCost,
+        currency: currency,
+        tokensInput: tokensInput,
+        tokensOutput: tokensOutput,
+        tokensTotal: tokensInput + tokensOutput
       };
     }
 
