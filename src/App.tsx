@@ -58,7 +58,7 @@ export default function App() {
         setWebhookUrl(resN8N.data.value);
       }
     } catch (e: any) {
-      console.error('Erro ao buscar configuração do webhook:', e.message);
+      console.error('Erro ao buscar configurações:', e.message);
     }
   };
 
@@ -207,27 +207,48 @@ export default function App() {
         </header>
 
         {/* Global Configuration Section */}
-        <div className="border border-zinc-800 rounded-lg p-5 flex flex-col md:flex-row md:items-end justify-between gap-4 bg-zinc-950/30">
-          <div className="flex-1 w-full max-w-2xl">
-            <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Webhook className="w-3.5 h-3.5" /> Webhook Centralizador URL
-            </label>
-            <input
-              type="text"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://seu-sistema.com/webhook/..."
-              className="w-full bg-transparent border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-all font-mono text-sm placeholder-zinc-700"
-            />
+        <div className="border border-zinc-800 rounded-lg p-5 flex flex-col gap-4 bg-zinc-950/30">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="flex-1 w-full max-w-2xl">
+              <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Webhook className="w-3.5 h-3.5" /> Webhook Centralizador URL
+              </label>
+              <input
+                type="text"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://seu-sistema.com/webhook/..."
+                className="w-full bg-transparent border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-all font-mono text-sm placeholder-zinc-700"
+              />
+            </div>
+            <button
+              onClick={saveSettings}
+              disabled={savingWebhook}
+              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-medium py-2 px-5 rounded transition-colors flex items-center justify-center gap-2 shrink-0 border border-zinc-700 h-[38px]"
+            >
+              {savingWebhook ? <RefreshCw className="w-4 h-4 animate-spin text-zinc-400" /> : <Save className="w-4 h-4 text-zinc-400" />}
+              Salvar
+            </button>
           </div>
-          <button
-            onClick={saveSettings}
-            disabled={savingWebhook}
-            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-medium py-2 px-5 rounded transition-colors flex items-center justify-center gap-2 shrink-0 border border-zinc-700 h-[38px]"
-          >
-            {savingWebhook ? <RefreshCw className="w-4 h-4 animate-spin text-zinc-400" /> : <Save className="w-4 h-4 text-zinc-400" />}
-            Salvar
-          </button>
+
+          <div className="flex-1 w-full pt-2 border-t border-zinc-800/50">
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5"><Key className="w-3.5 h-3.5" /> Integração Kommo</span>
+              </label>
+              <button
+                onClick={() => {
+                  const dynamicUrl = `${window.location.origin}/auth/kommo/callback`;
+                  navigator.clipboard.writeText(dynamicUrl);
+                  alert('Redirect URI copiado para a área de transferência:\n' + dynamicUrl);
+                }}
+                className="px-3 py-1.5 text-xs font-medium border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors flex items-center gap-2"
+                title="Copiar URL Callback"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copiar URL de Callback
+              </button>
+            </div>
+          </div>
         </div>
 
         {errorMessage && (

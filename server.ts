@@ -680,7 +680,10 @@ Retorne exclusivamente o JSON preenchido. O "novoStatusId" DEVE ser um número i
 app.get('/auth/kommo/connect', (req: Request, res: Response) => {
   try {
     const client_id = process.env.KOMMO_CLIENT_ID;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : 'https://tarif.nexusdevhub.com/auth/kommo/callback');
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const dynamic_redirect = `${protocol}://${host}/auth/kommo/callback`;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || dynamic_redirect;
 
     const empresa_id = req.query.empresa_id || req.query.tenantId;
 
@@ -723,7 +726,10 @@ app.get('/auth/kommo/callback', async (req: Request, res: Response) => {
 
     const client_id = process.env.KOMMO_CLIENT_ID;
     const client_secret = process.env.KOMMO_CLIENT_SECRET;
-    const redirect_uri = process.env.KOMMO_REDIRECT_URI || (process.env.APP_URL ? `${process.env.APP_URL}/auth/kommo/callback` : 'https://tarif.nexusdevhub.com/auth/kommo/callback');
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const dynamic_redirect = `${protocol}://${host}/auth/kommo/callback`;
+    const redirect_uri = process.env.KOMMO_REDIRECT_URI || dynamic_redirect;
 
     const tenantId = state;
 
