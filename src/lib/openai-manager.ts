@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
+import OpenAI from 'openai';
 
 const prisma = new PrismaClient();
 
@@ -107,4 +108,33 @@ export async function getOpenAiProjectsFromDb() {
   return await prisma.openAiProject.findMany({
     orderBy: { createdAt: 'desc' }
   });
+}
+
+/**
+ * Conta os tokens exatos que o modelo receberá (útil para estimativa de custos locais)
+ * Usa o novo endpoint da Responses API da OpenAI
+ */
+export async function countInputTokens(apiKey: string, model: string, input: any, instructions?: string, tools?: any[]) {
+  const client = new OpenAI({ apiKey });
+  
+  const payload: any = {
+    model,
+    input
+  };
+  
+  if (instructions) {
+    payload.instructions = instructions;
+  }
+  
+  if (tools) {
+    payload.tools = tools;
+  }
+
+  // Calls the new input_tokens/count API
+  const response = await client.responses.input_tokens.count(payload);
+  
+  return {
+    tokens: response.input_tokens,
+    model: model
+  };
 }
