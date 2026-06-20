@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Kommo Integrations by Fernando Nascimento Batista",
+  "description": "Desenvolvido por Fernando Nascimento Batista",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

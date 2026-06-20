@@ -178,6 +178,7 @@ export default function App() {
               Integrações
             </h1>
             <p className="text-sm text-zinc-500 mt-2">Gerenciador OAuth 2.0 Kommo (Multi-tenant)</p>
+            <p className="text-xs text-zinc-600 mt-1">Propriedade exclusiva - Desenvolvido por Fernando Nascimento Batista</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -298,37 +299,33 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Credencial OpenAI (API Key) */}
+                        {/* Credencial OpenAI (Secret Key) */}
                         <div className="text-sm border-t border-zinc-800/80 pt-3 mt-2">
-                          <span className="text-zinc-500 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 truncate text-zinc-300 text-xs px-2 py-1.5 bg-zinc-900/80 rounded border border-zinc-800">
-                              {openAiStats[conn.tenantId]?.apiKey ? 'sk-••••••••••••••••••••••••••••••••' : 'Não gerada / Não vinculada'}
-                            </code>
-                            {!openAiStats[conn.tenantId]?.apiKey && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-zinc-500 block text-[10px] uppercase tracking-wider font-sans font-semibold">Credencial OpenAI (Secret Key)</span>
+                            {!openAiStats[conn.tenantId]?.apiKey ? (
                               <button
                                 onClick={() => generateOpenAiProject(conn.tenantId, conn.accountName || "")}
-                                className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs font-medium transition-colors"
-                                title="Gerar API Key"
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-[10px] uppercase tracking-wider font-medium transition-colors"
+                                title="Gerar Secret Key"
                               >
-                                Gerar
+                                Gerar Key
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => {
+                                  const key = openAiStats[conn.tenantId]?.apiKey;
+                                  if (key) {
+                                    navigator.clipboard.writeText(key);
+                                    alert('Secret Key copiada para a área de transferência!');
+                                  }
+                                }}
+                                className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs border border-zinc-700"
+                                title="Copiar Secret Key"
+                              >
+                                <Copy size={14} /> Copiar Key
                               </button>
                             )}
-                            <button 
-                              onClick={() => {
-                                const key = openAiStats[conn.tenantId]?.apiKey;
-                                if (key) {
-                                  navigator.clipboard.writeText(key);
-                                  alert('API Key copiada para a área de transferência!');
-                                } else {
-                                  alert('Sem API Key para copiar.');
-                                }
-                              }}
-                              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
-                              title="Copiar API Key"
-                            >
-                              <Copy size={14} />
-                            </button>
                           </div>
                         </div>
 
@@ -478,37 +475,33 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Credencial OpenAI (API Key) */}
+                        {/* Credencial OpenAI (Secret Key) */}
                         <div className="text-sm border-t border-zinc-800/50 pt-3 mt-2">
-                          <span className="text-zinc-600 block text-[10px] uppercase tracking-wider mb-1.5 font-sans font-semibold">Credencial OpenAI (API Key) Gerada</span>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 truncate text-zinc-500 text-xs px-2 py-1.5 bg-black/50 rounded border border-zinc-800/50">
-                              {openAiStats[conn.tenantId]?.apiKey ? 'sk-••••••••••••••••••••••••••••••••' : 'Não gerada / Não vinculada'}
-                            </code>
-                            {!openAiStats[conn.tenantId]?.apiKey && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-zinc-600 block text-[10px] uppercase tracking-wider font-sans font-semibold">Credencial OpenAI (Secret Key)</span>
+                            {!openAiStats[conn.tenantId]?.apiKey ? (
                               <button
                                 onClick={() => generateOpenAiProject(conn.tenantId, conn.accountName || "")}
-                                className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs font-medium transition-colors"
-                                title="Gerar API Key"
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-[10px] uppercase tracking-wider font-medium transition-colors"
+                                title="Gerar Secret Key"
                               >
-                                Gerar
+                                Gerar Key
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => {
+                                  const key = openAiStats[conn.tenantId]?.apiKey;
+                                  if (key) {
+                                    navigator.clipboard.writeText(key);
+                                    alert('Secret Key copiada para a área de transferência!');
+                                  }
+                                }}
+                                className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 text-xs border border-zinc-700"
+                                title="Copiar Secret Key"
+                              >
+                                <Copy size={14} /> Copiar Key
                               </button>
                             )}
-                            <button 
-                              onClick={() => {
-                                const key = openAiStats[conn.tenantId]?.apiKey;
-                                if (key) {
-                                  navigator.clipboard.writeText(key);
-                                  alert('API Key copiada para a área de transferência!');
-                                } else {
-                                  alert('Sem API Key para copiar.');
-                                }
-                              }}
-                              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-500 hover:text-white transition-colors"
-                              title="Copiar API Key"
-                            >
-                              <Copy size={14} />
-                            </button>
                           </div>
                         </div>
 
