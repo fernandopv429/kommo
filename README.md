@@ -20,10 +20,14 @@ Este projeto está pronto para ser hospedado via [Coolify](https://coolify.io/) 
 1. No painel do seu Coolify, adicione um novo recurso escolhendo hospedar a partir do Git (Nixpacks/Dockerfile).
 2. Conecte ao seu repositório que contém os arquivos deste projeto.
 3. O Coolify deve identificar automaticamente o `Dockerfile` na raiz do projeto.
-4. Na aba **Environment Variables** (Variáveis de Ambiente), você deve preencher os valores essenciais de acordo com o `.env.example`, por exemplo:
+4. Na aba **Environment Variables** (Variáveis de Ambiente), você deve preencher os valores essenciais de acordo com o `.env.example`:
    - `OPENAI_API_KEY`: Sua chave de administração da conta OpenAI.
-   - `APP_URL`: URL na qual a sua aplicação ficará disponível (ex: `https://kommo.seusite.com`).
-   - `DATABASE_URL`: Endereço do seu banco PostgreSQL (pode ser o banco nativo criado no próprio Coolify).
-   - Quaisquer outras credenciais necessárias (Kommo, etc).
+   - `APP_URL`: URL base em que a sua aplicação ficará disponível (ex: `https://kommo.seusite.com`).
+   - `DATABASE_URL`: URL de conexão do PostgreSQL (você pode criar um banco nativo no próprio Coolify).
+   - `KOMMO_CLIENT_ID`: ID do cliente (Client ID) de integração no Kommo.
+   - `KOMMO_CLIENT_SECRET`: Segredo (Client Secret) da integração no Kommo.
+   - `KOMMO_REDIRECT_URI`: A URI de redirecionamento do Kommo (normalmente `SuaAPP_URL/auth/kommo/callback`).
+   - `EVOLUTION_API_KEY`: Chave de API de integração com o Evolution API.
+   - `EVOLUTION_URL`: URL base da instância do Evolution API.
 5. Defina a porta exposta como `3000` caso seja solicitado.
 6. Clique em **Deploy**! O Coolify irá construir a imagem Docker e colocar a aplicação no ar de forma automática.
