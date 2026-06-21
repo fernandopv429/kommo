@@ -64,6 +64,7 @@ export async function fetchLeadData(tenantId: string, telefone_limpo: string, co
     } catch (err: any) {
       if (err.response && err.response.status !== 204) {
         console.error('[Evolution] Erro ao buscar contatos na Kommo:', err.response?.data || err.message);
+        console.error('[Evolution] Dados anexos ao erro de contato:', JSON.stringify(err.response?.data).substring(0, 500));
       }
     }
 
@@ -170,6 +171,9 @@ export async function fetchLeadData(tenantId: string, telefone_limpo: string, co
       return { exists: false, lead: null };
     }
     console.error('[Evolution] Erro ao buscar lead na Kommo:', kommoErr.response?.data || kommoErr.message);
+    if (kommoErr.response) {
+      console.error('[Evolution] Erro na requisição Kommo (status HTTP):', kommoErr.response.status);
+    }
     return { exists: false, lead: null };
   }
 }

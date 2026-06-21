@@ -79,10 +79,18 @@ export const kommoWebhook = async (req: Request, res: Response) => {
       access_token: connection.accessToken
     };
 
-    console.log(`[Webhook Kommo] Payload extraído: lead_id=${leadId}, status_id=${statusId}. Enviando para N8N: ${n8nUrl}`);
+    console.log(`[Webhook Kommo] Payload extraído: lead_id=${leadId}, status_id=${statusId}. URL N8N: ${n8nUrl}`);
+    console.log(`[Webhook Kommo] Payload completo para envio N8N:`, JSON.stringify(payloadToN8n, null, 2));
 
-    axios.post(n8nUrl, payloadToN8n).catch(err => {
-      console.error('[Webhook Kommo] Falha ao enviar para o N8N:', err.message);
+    axios.post(n8nUrl, payloadToN8n).then(response => {
+        console.log(`[Webhook Kommo] Encaminhado com sucesso para N8N. Status: ${response.status}`);
+    }).catch(err => {
+      console.error('[Webhook Kommo] ERRO ao enviar para o N8N:', err.message);
+      if (err.response) {
+          console.error(`[Webhook Kommo] Resposta de erro do n8n (Status ${err.response.status}):`, err.response.data);
+      } else if (err.request) {
+          console.error(`[Webhook Kommo] Nenhuma resposta recebida do n8n. Erro de rede ou timeout.`);
+      }
     });
 
     res.status(200).send('OK');
@@ -108,15 +116,18 @@ export const evolutionWebhook = async (req: Request, res: Response) => {
       
       if (n8nUrl) {
          try {
-           await axios.post(n8nUrl, {
+           const response = await axios.post(n8nUrl, {
              event_type: 'evolution_connection_update',
              tenantId: tenantId,
              state: state,
              raw_data: body
            });
-           console.log(`[Evolution Webhook] Evento de desconexão/conexão enviado para o n8n.`);
+           console.log(`[Evolution Webhook] Evento de desconexão/conexão enviado para o n8n. Status: ${response.status}`);
          } catch(e: any) {
-           console.warn(`[Evolution Webhook] Falha ao enviar evento de conexão para n8n: ${e.message}`);
+           console.error(`[Evolution Webhook] ERRO ao enviar evento de conexão para n8n:`, e.message);
+           if (e.response) {
+               console.error(`[Evolution Webhook] Resposta erro n8n:`, e.response.data);
+           }
          }
       }
       
@@ -144,6 +155,7 @@ export const evolutionWebhook = async (req: Request, res: Response) => {
     res.status(200).send('Queued');
   } catch (error: any) {
     console.error('[Evolution Webhook] Erro crítico:', error.message);
+    console.error('[Evolution Webhook] Detalhes do erro:', error.stack);
     res.status(500).send('Internal Error');
   }
 };

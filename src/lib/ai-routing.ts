@@ -215,7 +215,11 @@ Retorne exclusivamente o JSON preenchido. O "novoStatusId" DEVE ser um número i
     
     return parsed;
   } catch (err: any) {
-    console.error("[Gemini Routing] Falha na avaliação:", err.message);
+    console.error("[Gemini Routing] Falha na avaliação (ERRO COMPLETO):", err.message);
+    if (err.response) {
+       console.error("[Gemini Routing] Resposta da API:", err.response.data);
+    }
+    console.error("[Gemini Routing] Trace:", err.stack);
     return null;
   }
 }

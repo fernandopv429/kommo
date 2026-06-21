@@ -149,11 +149,19 @@ if (process.env.REDIS_URL) {
       }
 
       try {
-        console.log(`[Worker] Enviando Payload enriquecido para n8n: ${JSON.stringify(payloadToN8n).substring(0, 500)}`);
-        await axios.post(n8nUrl, payloadToN8n);
-        console.log(`[Worker] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
+        console.log(`[Worker] Tentando enviar Payload para n8n URL: ${n8nUrl}`);
+        console.log(`[Worker] Payload completo para envio: ${JSON.stringify(payloadToN8n, null, 2)}`);
+        const response = await axios.post(n8nUrl, payloadToN8n);
+        console.log(`[Worker] Encaminhado com sucesso para o n8n do tenant ${tenantId}. Status: ${response.status}`);
       } catch (err: any) {
-        console.warn(`[Worker] Erro ao enviar para N8N: ${err.message}`);
+        console.error(`[Worker] ERRO AO ENVIAR WEBHOOK PARA N8N:`, err.message);
+        if (err.response) {
+            console.error(`[Worker] Resposta de erro do n8n (Status ${err.response.status}):`, err.response.data);
+        } else if (err.request) {
+            console.error(`[Worker] Nenhuma resposta recebida do n8n. Erro de rede, DNS, ou timeout.`);
+        } else {
+            console.error(`[Worker] Erro de configuração na chamada axios:`, err.message);
+        }
       }
     } else {
       console.warn(`[Worker] Webhook N8N não configurado. Não é possível encaminhar.`);
