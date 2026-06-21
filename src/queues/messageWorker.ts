@@ -8,9 +8,12 @@ import { refreshKommoToken } from '../lib/kommo-auth';
 
 const prisma = new PrismaClient();
 
-export const messageWorker = new Worker(
-  'evolution-messages',
-  async (job: Job) => {
+export let messageWorker: Worker | null = null;
+
+if (process.env.REDIS_URL) {
+  messageWorker = new Worker(
+    'evolution-messages',
+    async (job: Job) => {
     const { tenantId, telefone_whatsapp, bufferKey } = job.data;
 
     console.log(`[Worker] Iniciando job ${job.id} para ${tenantId}:${telefone_whatsapp}`);
@@ -55,22 +58,28 @@ export const messageWorker = new Worker(
 
     if (lead_existe && finalLeadData) {
       const oldStatusId = finalLeadData.status_id;
-      ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
-      
-      const novoStatusNum = Number(ai_parsed.novoStatusId);
-      const isStatusChanged = !isNaN(novoStatusNum) && novoStatusNum > 0 && novoStatusNum !== Number(oldStatusId);
+      const isAiActive = connection.aiEnabled && connection.aiActiveStages.length > 0 && connection.aiActiveStages.includes(oldStatusId);
 
-      if (isStatusChanged) {
-        finalLeadData.status_id = novoStatusNum;
-        action_taken = `Moveu para etapa ${novoStatusNum}`;
+      if (isAiActive) {
+        ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
+        
+        const novoStatusNum = Number(ai_parsed.novoStatusId);
+        const isStatusChanged = !isNaN(novoStatusNum) && novoStatusNum > 0 && novoStatusNum !== Number(oldStatusId);
+
+        if (isStatusChanged) {
+          finalLeadData.status_id = novoStatusNum;
+          action_taken = `Moveu para etapa ${novoStatusNum}`;
+        } else {
+          action_taken = "Manteve na etapa atual";
+        }
+
+        if (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0) {
+          action_taken = action_taken ? `${action_taken} | Atualizou campos` : "Atualizou campos";
+        }
+        ai_text_response = JSON.stringify(ai_parsed);
       } else {
-        action_taken = "Manteve na etapa atual";
+        action_taken = "Ignorado (IA desativada para esta etapa)";
       }
-
-      if (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0) {
-        action_taken = action_taken ? `${action_taken} | Atualizou campos` : "Atualizou campos";
-      }
-      ai_text_response = JSON.stringify(ai_parsed);
     } else {
       action_taken = "Ignorado (Lead inexistente)";
     }
@@ -177,11 +186,14 @@ export const messageWorker = new Worker(
     concurrency: 10 // processar várias mensagens independentes em paralelo se precisar
   }
 );
+}
 
-messageWorker.on('completed', job => {
-  console.log(`[Worker] Job ${job.id} concluído com sucesso.`);
-});
+if (messageWorker) {
+  messageWorker.on('completed', job => {
+    console.log(`[Worker] Job ${job.id} concluído com sucesso.`);
+  });
 
-messageWorker.on('failed', (job, err) => {
-  console.error(`[Worker] Job ${job?.id} falhou com erro: ${err.message}`);
-});
+  messageWorker.on('failed', (job, err) => {
+    console.error(`[Worker] Job ${job?.id} falhou com erro: ${err.message}`);
+  });
+}

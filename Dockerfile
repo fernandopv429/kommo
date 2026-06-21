@@ -38,6 +38,6 @@ ENV PORT=3000
 # O Coolify vai mapear a porta automaticamente
 EXPOSE 3000
 
-# Dica: No painel do Coolify (no campo Pre-Deployment Command), você pode adicionar:
-# npx prisma db push (ou npx prisma migrate deploy) para rodar as migrations antes do app subir
-CMD ["npm", "start"]
+# Executa o prisma db push antes de inicializar o servidor para garantir
+# que o banco de dados esteja atualizado a cada novo deploy.
+CMD ["sh", "-c", "npx prisma db push && npm start"]

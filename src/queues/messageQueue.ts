@@ -1,12 +1,19 @@
 import { Queue } from 'bullmq';
 import { redisConnection } from '../lib/redis';
 
-// Define a fila do BullMQ
-export const messageQueue = new Queue('evolution-messages', {
-  connection: redisConnection
-});
+// Define a fila do BullMQ apenas se existir URL
+export let messageQueue: Queue | null = null;
+if (process.env.REDIS_URL) {
+  messageQueue = new Queue('evolution-messages', {
+    connection: redisConnection
+  });
+}
 
 export const addMessageToBuffer = async (tenantId: string, telefone_whatsapp: string, mensagem: string) => {
+  if (!messageQueue || !process.env.REDIS_URL) {
+     console.warn(`[Queue] Ignorando mensagem de ${telefone_whatsapp} pois REDIS_URL não está configurado.`);
+     return;
+  }
   const bufferKey = `buffer:${tenantId}:${telefone_whatsapp}`;
   
   // Adiciona a mensagem ao buffer no Redis (usando list)

@@ -17,6 +17,8 @@ model KommoConnection {
   refreshToken    String
   expiresAt       DateTime
   isActive        Boolean  @default(true) // Controle de Ativo/Inativo
+  aiEnabled       Boolean  @default(true) // Ligar/desligar a IA
+  aiActiveStages  Int[]    @default([])   // IDs das etapas em que a IA atuará
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 }
