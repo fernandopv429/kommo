@@ -51,20 +51,22 @@ if (process.env.REDIS_URL) {
 
     const { exists: lead_existe, lead: finalLeadData, source: lead_source } = await fetchLeadData(tenantId, telefone_whatsapp, connection) as any;
 
-    // Analisa a mensagem com Gemini para mover de etapa
+    // Inicializa variáveis do escopo da IA
     let ai_parsed: any = {};
     let ai_text_response: string | null = null;
     let action_taken: string | null = null;
+    let isAiActive: boolean = false;
+    let oldStatusId: number | null = null;
 
     if (lead_existe && finalLeadData) {
-      const oldStatusId = finalLeadData.status_id;
+      oldStatusId = finalLeadData.status_id;
       const pipelineId = finalLeadData.pipeline_id;
       
       const isPipelineActive = !connection.aiActivePipelines || connection.aiActivePipelines.length === 0 || connection.aiActivePipelines.includes(pipelineId);
       const isStageActive = connection.aiActiveStages && connection.aiActiveStages.includes(oldStatusId);
       
       // A IA só atua se o global estiver ativo, a etapa estiver ativa, e (o funil estiver ativo OU não houver configuração de funil ainda)
-      const isAiActive = connection.aiEnabled && isPipelineActive && isStageActive;
+      isAiActive = !!(connection.aiEnabled && isPipelineActive && isStageActive);
 
       if (isAiActive) {
         ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};
@@ -107,7 +109,7 @@ if (process.env.REDIS_URL) {
       console.warn(`[Worker] Falha ao salvar InteractionLog:`, e.message);
     }
 
-    // Repasse completo para o n8n
+    // Repasse robusto para o n8n
     const webhookSetting = await prisma.systemSetting.findUnique({ where: { key: 'N8N_WEBHOOK_URL' } });
     const n8nUrl = webhookSetting?.value || process.env.N8N_WEBHOOK_URL;
     
@@ -116,7 +118,8 @@ if (process.env.REDIS_URL) {
         mensagem_whatsapp,
         telefone_whatsapp,
         lead_existe,
-        lead: finalLeadData,
+        ia_ativada: isAiActive,
+        acao_tomada: action_taken || "Nenhuma ação mapeada",
         access_token: connection.accessToken,
         subdomain: connection.kommoSubdomain,
         tenantId: connection.tenantId,
@@ -125,7 +128,7 @@ if (process.env.REDIS_URL) {
         Nome: finalLeadData ? finalLeadData.name : "",
         Status_id: (ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0) ? Number(ai_parsed.novoStatusId) : (finalLeadData ? finalLeadData.status_id : null),
         campos_personalizados_lead: finalLeadData ? finalLeadData.custom_fields : {},
-        has_update: ((ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0 && Number(ai_parsed.novoStatusId) !== Number(finalLeadData ? finalLeadData.status_id : null))) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0),
+        has_update: !!((ai_parsed.novoStatusId && Number(ai_parsed.novoStatusId) > 0 && Number(ai_parsed.novoStatusId) !== Number(oldStatusId)) || (ai_parsed.custom_fields && ai_parsed.custom_fields.length > 0)),
         campos_personalizados_atualizados_ia: ai_parsed.custom_fields || []
       };
 
