@@ -31,7 +31,19 @@ Este projeto está pronto para ser hospedado via [Coolify](https://coolify.io/) 
    - `EVOLUTION_URL`: URL base da instância do Evolution API.
    - `REDIS_URL`: URL de conexão com o banco Redis (usado para o Buffer/Fila do BullMQ).
 5. Defina a porta exposta como `3000` caso seja solicitado.
-6. Clique em **Deploy**! O Coolify irá construir a imagem Docker e colocar a aplicação no ar de forma automática.
+6. **Configuração de Build e Inicialização (IMPORTANTE)**: No Coolify você pode escolher duas formas de fazer o deploy, **Nixpacks** (Padrão) ou **Docker**:
+   - **Se usar Nixpacks**: 
+     - **Build Command**: `npm install && npx prisma generate && npm run build`
+     - **Start Command**: `npx prisma db push && npm start` *(Esse comando iniciará a base de dados primeiro e depois o servidor nas portas adequadas)*
+   - **Se usar Docker**:
+     - O sistema já possui um `Dockerfile` otimizado (Multi-stage).
+     - Você pode deixar os campos *Build Command* e *Start Command* vazios.
+     - No campo **Docker Build Stage Target**, você pode deixar **vazio** (ele pegará o último estágio automaticamente) ou preencher com `runner`.
+7. **Variáveis de URL e Fila (Fundamental)**: 
+   - Se certifique de configurar a `APP_URL` com a URL pública final que o Coolify gerar para o seu app.
+   - É **Obrigatório** ter um banco Redis rodando (você pode provisionar um com um clique no Coolify) e apontar a variável de ambiente `REDIS_URL`. Isso é essencial pois as mensagens do WhatsApp entram numa fila antes de irem pro seu webhook centralizador.
+8. Clique em **Deploy**! A plataforma iniciará o processo de instalação e fará o servidor entrar online com sucesso.
+9. **Após o App estar no ar**: Entre no sistema e clique no botão **Sincronizar Webhook** na listagem de conexões. Isso dirá à Evolution que a URL do seu sistema agora é a URL do Coolify.
 
 ## Como o Sistema Funciona
 

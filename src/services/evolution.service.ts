@@ -18,11 +18,15 @@ export async function createEvolutionInstance(tenantId: string, hostUrl?: string
           webhook: {
             enabled: true,
             url: `${finalUrl}/api/webhooks/evolution/${tenantId}`,
-            webhookByEvents: true,
+            webhookByEvents: false,
+            byEvents: false,
             webhookBase64: false,
+            base64: false,
             events: [
               "MESSAGES_UPSERT",
-              "CONNECTION_UPDATE"
+              "CONNECTION_UPDATE",
+              "messages.upsert",
+              "connection.update"
             ]
           }
         },

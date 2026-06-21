@@ -68,9 +68,11 @@ export const syncEvolutionWebhook = async (req: Request, res: Response) => {
         webhook: {
           enabled: true,
           url: `${finalUrl}/api/webhooks/evolution/${tenant_id}`,
-          webhookByEvents: true,
+          webhookByEvents: false,
+          byEvents: false,
           webhookBase64: false,
-          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"]
+          base64: false,
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "messages.upsert", "connection.update"]
         }
       },
       {
