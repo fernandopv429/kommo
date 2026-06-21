@@ -5,11 +5,12 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity, Key, Copy } from 'lucide-react';
+import { Network, ExternalLink, RefreshCw, Pause, Play, CheckCircle2, XCircle, Smartphone, Save, Webhook, Activity, Key, Copy, Bot } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import WhatsAppConnection from './components/WhatsAppConnection';
 import LogsViewer from './components/LogsViewer';
 import ManualConnectionModal from './components/ManualConnectionModal';
+import AiSettingsModal from './components/AiSettingsModal';
 
 interface Connection {
   id: string;
@@ -18,6 +19,8 @@ interface Connection {
   kommoSubdomain: string;
   kommoAccountId: string;
   isActive: boolean;
+  aiEnabled?: boolean;
+  aiActiveStages?: number[];
   expiresAt: string;
   updatedAt: string;
   evolutionState?: string;
@@ -35,6 +38,7 @@ export default function App() {
   const [syncingTenant, setSyncingTenant] = useState<string | null>(null);
   const [selectedTenantForLogs, setSelectedTenantForLogs] = useState<string | null>(null);
   const [showManualConnection, setShowManualConnection] = useState(false);
+  const [selectedConnectionForAi, setSelectedConnectionForAi] = useState<Connection | null>(null);
   const [openAiStats, setOpenAiStats] = useState<Record<string, any>>({});
 
   const getEvoStatusElement = (state?: string) => {
@@ -374,6 +378,14 @@ export default function App() {
                             <Activity className="w-4 h-4" />
                           </button>
                           
+                          <button
+                            onClick={() => setSelectedConnectionForAi(conn)}
+                            className="text-zinc-400 hover:text-indigo-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            title="Configurações de IA"
+                          >
+                            <Bot className="w-4 h-4" />
+                          </button>
+                          
                           <div className="flex-1"></div>
                           
                           <button
@@ -535,6 +547,14 @@ export default function App() {
                             <Activity className="w-4 h-4" />
                           </button>
 
+                          <button
+                            onClick={() => setSelectedConnectionForAi(conn)}
+                            className="text-zinc-500 hover:text-indigo-400 hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                            title="Configurações de IA"
+                          >
+                            <Bot className="w-4 h-4" />
+                          </button>
+
                           <div className="flex-1"></div>
 
                           <button
@@ -631,6 +651,23 @@ export default function App() {
             onClose={() => setShowManualConnection(false)} 
             onSuccess={() => {
               setShowManualConnection(false);
+              fetchConnections();
+            }}
+          />
+        </div>
+      )}
+
+      {selectedConnectionForAi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity">
+          <AiSettingsModal
+            connectionId={selectedConnectionForAi.id}
+            tenantId={selectedConnectionForAi.tenantId}
+            accountName={selectedConnectionForAi.accountName}
+            initialAiEnabled={selectedConnectionForAi.aiEnabled ?? true}
+            initialActiveStages={selectedConnectionForAi.aiActiveStages ?? []}
+            onClose={() => setSelectedConnectionForAi(null)}
+            onSuccess={() => {
+              setSelectedConnectionForAi(null);
               fetchConnections();
             }}
           />

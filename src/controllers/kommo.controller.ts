@@ -187,6 +187,8 @@ export const getConnections = async (req: Request, res: Response) => {
           kommoSubdomain: true,
           kommoAccountId: true,
           isActive: true,
+          aiEnabled: true,
+          aiActiveStages: true,
           expiresAt: true,
           updatedAt: true
       },
@@ -413,6 +415,52 @@ export const updateAiSettings = async (req: Request, res: Response) => {
     const err = e as Error;
     console.error('[API updateAiSettings] Erro:', err.message);
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const getPipelines = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const connection = await prisma.kommoConnection.findUnique({ where: { id } });
+    if (!connection) {
+      res.status(404).json({ error: 'Conexão não encontrada' });
+      return;
+    }
+
+    const now = new Date();
+    const timeRemainingMs = connection.expiresAt.getTime() - now.getTime();
+    if (timeRemainingMs < 900000) {
+      await refreshKommoToken(connection.kommoAccountId);
+      const updatedConn = await prisma.kommoConnection.findUnique({ where: { kommoAccountId: connection.kommoAccountId } });
+      if (updatedConn) connection.accessToken = updatedConn.accessToken;
+    }
+
+    const kommoResponse = await axios.get(`https://${connection.kommoSubdomain}.kommo.com/api/v4/leads/pipelines`, {
+      headers: {
+        'Authorization': `Bearer ${connection.accessToken}`
+      }
+    });
+
+    const pipelinesData = kommoResponse.data?._embedded?.pipelines || [];
+
+    const formattedPipelines = pipelinesData.map((pipeline: any) => {
+      const statuses = pipeline._embedded?.statuses || [];
+      return {
+        id: pipeline.id,
+        name: pipeline.name,
+        statuses: statuses.map((status: any) => ({
+          id: status.id,
+          name: status.name,
+          color: status.color
+        }))
+      };
+    });
+
+    res.json(formattedPipelines);
+  } catch (error: any) {
+    console.error('[API getPipelines] Erro:', error?.response?.data || error.message);
+    res.status(500).json({ error: 'Erro interno ao buscar as pipelines.', details: error?.response?.data });
   }
 };
 
