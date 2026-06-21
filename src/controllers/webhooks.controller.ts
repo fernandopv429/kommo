@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 export const kommoWebhook = async (req: Request, res: Response) => {
   try {
     const kommoAccountIdStr = req.body?.account?.id || req.body?.account_id || req.query.account_id;
+    console.log(`[Webhook Kommo] Evento recebido! Raw Body: ${JSON.stringify(req.body).substring(0, 500)}`);
     
     if (!kommoAccountIdStr) {
       console.warn('[Webhook Kommo] Evento recebido sem ID de conta (account.id).');
@@ -53,8 +54,23 @@ export const kommoWebhook = async (req: Request, res: Response) => {
       return;
     }
 
-    const leadId = req.body['leads[status][0][id]'] || req.body['leads[add][0][id]'];
-    const statusId = req.body['leads[status][0][status_id]'] || req.body['leads[add][0][status_id]'];
+    let leadId = null;
+    let statusId = null;
+
+    if (req.body?.leads?.status && req.body.leads.status[0]) {
+      leadId = req.body.leads.status[0].id;
+      statusId = req.body.leads.status[0].status_id;
+    } else if (req.body?.leads?.add && req.body.leads.add[0]) {
+      leadId = req.body.leads.add[0].id;
+      statusId = req.body.leads.add[0].status_id;
+    } else if (req.body?.leads?.update && req.body.leads.update[0]) {
+      leadId = req.body.leads.update[0].id;
+      statusId = req.body.leads.update[0].status_id;
+    } else {
+      // Fallback para flat keys caso extended seja false ou venha como json flat
+      leadId = req.body['leads[status][0][id]'] || req.body['leads[add][0][id]'] || req.body['leads[update][0][id]'];
+      statusId = req.body['leads[status][0][status_id]'] || req.body['leads[add][0][status_id]'] || req.body['leads[update][0][status_id]'];
+    }
 
     const payloadToN8n = {
       lead_id: leadId,
@@ -62,6 +78,8 @@ export const kommoWebhook = async (req: Request, res: Response) => {
       subdomain: connection.kommoSubdomain,
       access_token: connection.accessToken
     };
+
+    console.log(`[Webhook Kommo] Payload extraído: lead_id=${leadId}, status_id=${statusId}. Enviando para N8N: ${n8nUrl}`);
 
     axios.post(n8nUrl, payloadToN8n).catch(err => {
       console.error('[Webhook Kommo] Falha ao enviar para o N8N:', err.message);
@@ -78,6 +96,8 @@ export const evolutionWebhook = async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const body = req.body;
+    console.log(`[Evolution Webhook] Evento recebido no tenant ${tenantId}! Evento: ${body?.event}`);
+    // console.log(`[Evolution Webhook] Body Raw: ${JSON.stringify(body).substring(0, 500)}`);
 
     if (body?.event === 'connection.update') {
       const state = body?.data?.state || body?.state || body?.data?.status || 'unknown';

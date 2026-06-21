@@ -156,7 +156,8 @@ export async function registerKommoWebhook(kommoAccountId: string, hostUrl?: str
     const { accessToken, kommoSubdomain } = connection;
     
     // Utilize a URL do app se disponível, senão fallback p/ a URL do seu painel
-    const basePath = hostUrl ? hostUrl.trim() : (process.env.APP_URL?.trim() || "https://tarif.nexusdevhub.com");
+    const basePathStr = hostUrl ? hostUrl.trim() : (process.env.APP_URL?.trim() || "https://tarif.nexusdevhub.com");
+    const basePath = basePathStr.replace(/\/$/, '');
     const destination = `${basePath}/api/webhooks/kommo`;
 
     const webhookUrl = `https://${kommoSubdomain}.kommo.com/api/v4/webhooks`;

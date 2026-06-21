@@ -60,10 +60,10 @@ if (process.env.REDIS_URL) {
       const oldStatusId = finalLeadData.status_id;
       const pipelineId = finalLeadData.pipeline_id;
       
-      const isPipelineActive = connection.aiActivePipelines && connection.aiActivePipelines.includes(pipelineId);
+      const isPipelineActive = !connection.aiActivePipelines || connection.aiActivePipelines.length === 0 || connection.aiActivePipelines.includes(pipelineId);
       const isStageActive = connection.aiActiveStages && connection.aiActiveStages.includes(oldStatusId);
       
-      // A IA só atua se o global estiver ativo, O FUNIL estiver ativo E A ETAPA estiver ativa.
+      // A IA só atua se o global estiver ativo, a etapa estiver ativa, e (o funil estiver ativo OU não houver configuração de funil ainda)
       const isAiActive = connection.aiEnabled && isPipelineActive && isStageActive;
 
       if (isAiActive) {
@@ -146,13 +146,14 @@ if (process.env.REDIS_URL) {
       }
 
       try {
+        console.log(`[Worker] Enviando Payload enriquecido para n8n: ${JSON.stringify(payloadToN8n).substring(0, 500)}`);
         await axios.post(n8nUrl, payloadToN8n);
         console.log(`[Worker] Encaminhado com sucesso para o n8n do tenant ${tenantId}`);
       } catch (err: any) {
         console.warn(`[Worker] Erro ao enviar para N8N: ${err.message}`);
       }
     } else {
-      console.warn(`[Worker] Webhook N8N não configurado.`);
+      console.warn(`[Worker] Webhook N8N não configurado. Não é possível encaminhar.`);
     }
 
     // Atualiza o cache persistente
