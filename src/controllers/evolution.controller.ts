@@ -59,7 +59,7 @@ export const syncEvolutionWebhook = async (req: Request, res: Response) => {
     const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
     const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 
-    const finalUrl = 'https://tarif.nexusdevhub.com';
+    const finalUrl = process.env.APP_URL?.trim() || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`;
 
     await axios.post(
       `${EVOLUTION_URL_EXEC}/webhook/set/${tenant_id}`,

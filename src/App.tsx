@@ -21,6 +21,7 @@ interface Connection {
   isActive: boolean;
   aiEnabled?: boolean;
   aiActiveStages?: number[];
+  aiActivePipelines?: number[];
   expiresAt: string;
   updatedAt: string;
   evolutionState?: string;
@@ -665,6 +666,7 @@ export default function App() {
             accountName={selectedConnectionForAi.accountName}
             initialAiEnabled={selectedConnectionForAi.aiEnabled ?? true}
             initialActiveStages={selectedConnectionForAi.aiActiveStages ?? []}
+            initialActivePipelines={selectedConnectionForAi.aiActivePipelines ?? []}
             onClose={() => setSelectedConnectionForAi(null)}
             onSuccess={() => {
               setSelectedConnectionForAi(null);

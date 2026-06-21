@@ -20,6 +20,7 @@ interface AiSettingsModalProps {
   accountName: string | null;
   initialAiEnabled: boolean;
   initialActiveStages: number[];
+  initialActivePipelines: number[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -30,6 +31,7 @@ export default function AiSettingsModal({
   accountName,
   initialAiEnabled,
   initialActiveStages,
+  initialActivePipelines,
   onClose,
   onSuccess
 }: AiSettingsModalProps) {
@@ -40,6 +42,7 @@ export default function AiSettingsModal({
 
   const [aiEnabled, setAiEnabled] = useState(initialAiEnabled);
   const [activeStages, setActiveStages] = useState<number[]>(initialActiveStages);
+  const [activePipelines, setActivePipelines] = useState<number[]>(initialActivePipelines || []);
 
   useEffect(() => {
     const fetchPipelines = async () => {
@@ -66,6 +69,14 @@ export default function AiSettingsModal({
         : [...prev, stageId]
     );
   };
+  
+  const togglePipeline = (pipelineId: number) => {
+    setActivePipelines(prev =>
+      prev.includes(pipelineId)
+        ? prev.filter(id => id !== pipelineId)
+        : [...prev, pipelineId]
+    );
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -73,7 +84,8 @@ export default function AiSettingsModal({
     try {
       await axios.patch(`/api/connections/${connectionId}/ai-settings`, {
         aiEnabled,
-        aiActiveStages: activeStages
+        aiActiveStages: activeStages,
+        aiActivePipelines: activePipelines
       });
       onSuccess();
     } catch (err: any) {
@@ -152,12 +164,25 @@ export default function AiSettingsModal({
             {pipelines.length === 0 ? (
               <p className="text-sm text-zinc-500 text-center py-6">Nenhum funil (pipeline) retornado pela Kommo.</p>
             ) : (
-              pipelines.map(pipeline => (
+              pipelines.map(pipeline => {
+                const isPipelineChecked = activePipelines.includes(pipeline.id);
+                return (
                 <div key={pipeline.id} className="bg-zinc-900/40 border border-zinc-800 rounded-md overflow-hidden">
-                  <div className="bg-zinc-900/80 px-4 py-2 border-b border-zinc-800 font-medium text-sm text-zinc-200">
-                    {pipeline.name}
+                  <div className="bg-zinc-900/80 px-4 py-2 border-b border-zinc-800 flex items-center justify-between">
+                    <span className="font-medium text-sm text-zinc-200">{pipeline.name}</span>
+                    <div className="flex items-center gap-2">
+                       <span className="text-xs text-zinc-500">{isPipelineChecked ? 'Ativado' : 'Desativado'}</span>
+                       <button
+                         type="button"
+                         className={`w-9 h-5 rounded-full transition-colors relative shrink-0 focus:outline-none ${isPipelineChecked ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                         onClick={() => togglePipeline(pipeline.id)}
+                         title={isPipelineChecked ? "Desativar IA neste funil" : "Ativar IA neste funil"}
+                       >
+                         <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-transform ${isPipelineChecked ? 'left-[18px]' : 'left-1'}`} />
+                       </button>
+                    </div>
                   </div>
-                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className={`p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 transition-opacity ${!isPipelineChecked ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
                     {pipeline.statuses.map(stage => {
                       const isChecked = activeStages.includes(stage.id);
                       return (
@@ -194,7 +219,8 @@ export default function AiSettingsModal({
                     })}
                   </div>
                 </div>
-              ))
+              );
+            })
             )}
           </div>
         )}

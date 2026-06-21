@@ -147,8 +147,9 @@ export const kommoCallback = async (req: Request, res: Response) => {
 
     console.log(`[Kommo OAuth] Tokens da conta ${kommoAccountId} (tenant ${tenantId}) salvos com sucesso.`);
 
-    await registerKommoWebhook(kommoAccountId);
-    await createEvolutionInstance(tenantId);
+    const hostUrl = `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`;
+    await registerKommoWebhook(kommoAccountId, hostUrl);
+    await createEvolutionInstance(tenantId, hostUrl);
 
     res.send(`
       <html>
@@ -189,6 +190,7 @@ export const getConnections = async (req: Request, res: Response) => {
           isActive: true,
           aiEnabled: true,
           aiActiveStages: true,
+          aiActivePipelines: true,
           expiresAt: true,
           updatedAt: true
       },
@@ -394,7 +396,7 @@ export const toggleConnectionStatus = async (req: Request, res: Response) => {
 export const updateAiSettings = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { aiEnabled, aiActiveStages } = req.body;
+    const { aiEnabled, aiActiveStages, aiActivePipelines } = req.body;
 
     const connection = await prisma.kommoConnection.findUnique({ where: { id } });
     if (!connection) {
@@ -406,7 +408,8 @@ export const updateAiSettings = async (req: Request, res: Response) => {
       where: { id },
       data: {
         aiEnabled: aiEnabled !== undefined ? aiEnabled : connection.aiEnabled,
-        aiActiveStages: Array.isArray(aiActiveStages) ? aiActiveStages : connection.aiActiveStages
+        aiActiveStages: Array.isArray(aiActiveStages) ? aiActiveStages : connection.aiActiveStages,
+        aiActivePipelines: Array.isArray(aiActivePipelines) ? aiActivePipelines : connection.aiActivePipelines
       }
     });
 

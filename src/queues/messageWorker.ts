@@ -58,7 +58,13 @@ if (process.env.REDIS_URL) {
 
     if (lead_existe && finalLeadData) {
       const oldStatusId = finalLeadData.status_id;
-      const isAiActive = connection.aiEnabled && connection.aiActiveStages.length > 0 && connection.aiActiveStages.includes(oldStatusId);
+      const pipelineId = finalLeadData.pipeline_id;
+      
+      const isPipelineActive = connection.aiActivePipelines && connection.aiActivePipelines.includes(pipelineId);
+      const isStageActive = connection.aiActiveStages && connection.aiActiveStages.includes(oldStatusId);
+      
+      // A IA só atua se o global estiver ativo, O FUNIL estiver ativo E A ETAPA estiver ativa.
+      const isAiActive = connection.aiEnabled && isPipelineActive && isStageActive;
 
       if (isAiActive) {
         ai_parsed = await handleGeminiRouting(connection, mensagem_whatsapp, finalLeadData) || {};

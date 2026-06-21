@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export async function createEvolutionInstance(tenantId: string) {
+export async function createEvolutionInstance(tenantId: string, hostUrl?: string) {
   const EVOLUTION_URL_EXEC = process.env.EVOLUTION_URL || "https://evo.a5ecossistema.tech";
   const EVOLUTION_API_KEY_EXEC = process.env.EVOLUTION_API_KEY || "qMP4DBS5bI0MzgDRBOFLCIr6TxDHUES3";
 
@@ -9,7 +9,7 @@ export async function createEvolutionInstance(tenantId: string) {
   const setWebhook = async () => {
     console.log(`[Evolution] Configurando Webhook Centralizador para a instância: ${tenantId}`);
     try {
-      const finalUrl = 'https://tarif.nexusdevhub.com';
+      const finalUrl = hostUrl?.trim() || (process.env.APP_URL?.trim() || 'https://tarif.nexusdevhub.com');
 
       await axios.post(
         `${EVOLUTION_URL_EXEC}/webhook/set/${tenantId}`,

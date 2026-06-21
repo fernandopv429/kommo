@@ -18,6 +18,7 @@ model KommoConnection {
   expiresAt       DateTime
   isActive        Boolean  @default(true) // Controle de Ativo/Inativo
   aiEnabled       Boolean  @default(true) // Ligar/desligar a IA
+  aiActivePipelines Int[]  @default([])   // IDs dos pipelines em que a IA atuará inteiramente
   aiActiveStages  Int[]    @default([])   // IDs das etapas em que a IA atuará
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())

@@ -143,7 +143,7 @@ export async function ensureValidKommoToken(req: Request, res: Response, next: N
  * 3. FUNÇÃO DE REGISTRO DE WEBHOOK
  * Registra o webhook na Kommo para receber atualizações de leads
  */
-export async function registerKommoWebhook(kommoAccountId: string): Promise<void> {
+export async function registerKommoWebhook(kommoAccountId: string, hostUrl?: string): Promise<void> {
   try {
     const connection = await prisma.kommoConnection.findUnique({
       where: { kommoAccountId },
@@ -156,9 +156,8 @@ export async function registerKommoWebhook(kommoAccountId: string): Promise<void
     const { accessToken, kommoSubdomain } = connection;
     
     // Utilize a URL do app se disponível, senão fallback p/ a URL do seu painel
-    const destination = process.env.APP_URL 
-      ? `${process.env.APP_URL.trim()}/api/webhooks/kommo`
-      : "https://tarif.nexusdevhub.com/api/webhooks/kommo";
+    const basePath = hostUrl ? hostUrl.trim() : (process.env.APP_URL?.trim() || "https://tarif.nexusdevhub.com");
+    const destination = `${basePath}/api/webhooks/kommo`;
 
     const webhookUrl = `https://${kommoSubdomain}.kommo.com/api/v4/webhooks`;
 
