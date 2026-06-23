@@ -381,7 +381,7 @@ export default function App() {
                           
                           <button
                             onClick={() => setSelectedConnectionForAi(conn)}
-                            className="text-zinc-400 hover:text-indigo-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
+                            className="text-zinc-400 hover:text-white transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800 shrink-0"
                             title="Configurações de IA"
                           >
                             <Bot className="w-4 h-4" />
@@ -550,7 +550,7 @@ export default function App() {
 
                           <button
                             onClick={() => setSelectedConnectionForAi(conn)}
-                            className="text-zinc-500 hover:text-indigo-400 hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
+                            className="text-zinc-500 hover:text-white hover:bg-zinc-800/80 transition-colors flex items-center justify-center w-8 h-8 rounded shrink-0"
                             title="Configurações de IA"
                           >
                             <Bot className="w-4 h-4" />

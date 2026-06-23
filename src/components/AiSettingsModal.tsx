@@ -101,7 +101,7 @@ export default function AiSettingsModal({
       {/* Header */}
       <div className="flex items-center justify-between p-5 border-b border-zinc-800/80">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
             <Bot size={22} />
           </div>
           <div>
@@ -135,7 +135,7 @@ export default function AiSettingsModal({
           </div>
           <button
             type="button"
-            className={`w-12 h-6 rounded-full transition-colors relative shrink-0 focus:outline-none ${aiEnabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+            className={`w-12 h-6 rounded-full transition-colors relative shrink-0 focus:outline-none ${aiEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
             onClick={() => setAiEnabled(!aiEnabled)}
           >
             <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${aiEnabled ? 'left-7' : 'left-1'}`} />
@@ -174,7 +174,7 @@ export default function AiSettingsModal({
                        <span className="text-xs text-zinc-500">{isPipelineChecked ? 'Ativado' : 'Desativado'}</span>
                        <button
                          type="button"
-                         className={`w-9 h-5 rounded-full transition-colors relative shrink-0 focus:outline-none ${isPipelineChecked ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                         className={`w-9 h-5 rounded-full transition-colors relative shrink-0 focus:outline-none ${isPipelineChecked ? 'bg-emerald-500' : 'bg-zinc-700'}`}
                          onClick={() => togglePipeline(pipeline.id)}
                          title={isPipelineChecked ? "Desativar IA neste funil" : "Ativar IA neste funil"}
                        >
@@ -190,7 +190,7 @@ export default function AiSettingsModal({
                           key={stage.id}
                           className={`flex items-center gap-3 p-2.5 rounded cursor-pointer transition-colors border ${
                             isChecked
-                              ? 'bg-indigo-500/5 border-indigo-500/30'
+                              ? 'bg-emerald-500/5 border-emerald-500/30'
                               : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
                           }`}
                           onClick={() => toggleStage(stage.id)}
@@ -198,7 +198,7 @@ export default function AiSettingsModal({
                           <div
                             className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${
                               isChecked
-                                ? 'bg-indigo-500 border-indigo-500 text-white'
+                                ? 'bg-emerald-500 border-emerald-500 text-white'
                                 : 'bg-transparent border-zinc-600'
                             }`}
                           >
@@ -240,8 +240,8 @@ export default function AiSettingsModal({
           disabled={loading || saving}
           className={`flex items-center gap-2 px-5 py-2 rounded text-sm font-medium text-white transition-all ${
             loading || saving
-              ? 'bg-indigo-600/50 cursor-not-allowed'
-              : 'bg-indigo-600 hover:bg-indigo-500 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)]'
+              ? 'bg-emerald-600/50 cursor-not-allowed'
+              : 'bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
           }`}
         >
           {saving ? (
