@@ -101,7 +101,7 @@ export default function AiSettingsModal({
       {/* Header */}
       <div className="flex items-center justify-between p-5 border-b border-zinc-800/80">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+          <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-white">
             <Bot size={22} />
           </div>
           <div>
